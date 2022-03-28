@@ -47,48 +47,45 @@ class Optimizer(object):  # pragma: no cover
     def __init__(self):
         self.bfgsb = BFGSB()  # a box-constrained BFGS solver
 
-    def solve(self, x0, x, b, min_, max_, c, r):
-        # print(x0.shape, x.shape, b.shape)
-        # print(b.shape)
-        # print(min_, max_)
-        # print(c, r)
+    def solve(self, x0, x, b, _min, _max, c, r):
         x0, x, b = x0.astype(np.float64), x.astype(np.float64), b.astype(np.float64)
-        cmax, cmaxnorm = self._max_logit_diff(x, b, min_, max_, c)
+        _min, _max = _min.astype(np.float64), _max.astype(np.float64)
+        cmax, cmaxnorm = self._max_logit_diff(x, b, _min, _max, c)
 
         if np.abs(cmax) < np.abs(c):
             # problem not solvable (boundary cannot be reached)
             if np.sqrt(cmaxnorm) < r:
                 # make largest possible step towards boundary while staying within bounds
                 _delta = self.optimize_boundary_s_t_trustregion(
-                    x0, x, b, min_, max_, c, r
+                    x0, x, b, _min, _max, c, r
                 )
             else:
                 # make largest possible step towards boundary while staying within trust region
                 _delta = self.optimize_boundary_s_t_trustregion(
-                    x0, x, b, min_, max_, c, r
+                    x0, x, b, _min, _max, c, r
                 )
         else:
             if cmaxnorm < r:
                 # problem is solvable
                 # proceed with standard optimization
                 _delta = self.optimize_distance_s_t_boundary_and_trustregion(
-                    x0, x, b, min_, max_, c, r
+                    x0, x, b, _min, _max, c, r
                 )
             else:
                 # problem might not be solvable
                 bnorm = np.linalg.norm(b)
-                minnorm = self._minimum_norm_to_boundary(x, b, min_, max_, c, bnorm)
+                minnorm = self._minimum_norm_to_boundary(x, b, _min, _max, c, bnorm)
 
                 if minnorm <= r:
                     # problem is solvable, proceed with standard optimization
                     _delta = self.optimize_distance_s_t_boundary_and_trustregion(
-                        x0, x, b, min_, max_, c, r
+                        x0, x, b, _min, _max, c, r
                     )
                 else:
                     # problem not solvable (boundary cannot be reached)
                     # make largest step towards boundary within trust region
                     _delta = self.optimize_boundary_s_t_trustregion(
-                        x0, x, b, min_, max_, c, r
+                        x0, x, b, _min, _max, c, r
                     )
 
         return _delta
@@ -102,19 +99,19 @@ class Optimizer(object):  # pragma: no cover
         if c > 0:
             for n in range(N):
                 if b[n] > 0:
-                    cmax += b[n] * (_u - x[n])
-                    norm += (_u - x[n]) ** 2
+                    cmax += b[n] * (_u[n] - x[n])
+                    norm += (_u[n] - x[n]) ** 2
                 else:
-                    cmax += b[n] * (_ell - x[n])
-                    norm += (x[n] - _ell) ** 2
+                    cmax += b[n] * (_ell[n] - x[n])
+                    norm += (x[n] - _ell[n]) ** 2
         else:
             for n in range(N):
                 if b[n] > 0:
-                    cmax += b[n] * (_ell - x[n])
-                    norm += (x[n] - _ell) ** 2
+                    cmax += b[n] * (_ell[n] - x[n])
+                    norm += (x[n] - _ell[n]) ** 2
                 else:
-                    cmax += b[n] * (_u - x[n])
-                    norm += (_u - x[n]) ** 2
+                    cmax += b[n] * (_u[n] - x[n])
+                    norm += (_u[n] - x[n]) ** 2
 
         return cmax, np.sqrt(norm)
 
@@ -167,12 +164,12 @@ class Optimizer(object):  # pragma: no cover
                 for n in range(N):
                     lam_step = _lambda * b[n] / 2
                     if b[n] > 0:
-                        max_step = _u - x[n]
+                        max_step = _u[n] - x[n]
                         delta_step = min(max_step, lam_step)
                         _c += b[n] * delta_step
                         norm += delta_step ** 2
                     else:
-                        max_step = _ell - x[n]
+                        max_step = _ell[n] - x[n]
                         delta_step = max(max_step, lam_step)
                         _c += b[n] * delta_step
                         norm += delta_step ** 2
@@ -180,12 +177,12 @@ class Optimizer(object):  # pragma: no cover
                 for n in range(N):
                     lam_step = _lambda * b[n] / 2
                     if b[n] > 0:
-                        max_step = _ell - x[n]
+                        max_step = _ell[n] - x[n]
                         delta_step = max(max_step, lam_step)
                         _c += b[n] * delta_step
                         norm += delta_step ** 2
                     else:
-                        max_step = _u - x[n]
+                        max_step = _u[n] - x[n]
                         delta_step = min(max_step, lam_step)
                         _c += b[n] * delta_step
                         norm += delta_step ** 2
@@ -210,7 +207,7 @@ class Optimizer(object):  # pragma: no cover
         return np.sqrt(norm)
 
     def optimize_distance_s_t_boundary_and_trustregion(
-        self, x0, x, b, min_, max_, c, r
+        self, x0, x, b, _min, _max, c, r
     ):
         """ Find the solution to the optimization problem
 
@@ -218,15 +215,15 @@ class Optimizer(object):  # pragma: no cover
         """
         params0 = np.array([0.0, 0.0])
         bounds = np.array([(-np.inf, np.inf), (0, np.inf)])
-        args = (x0, x, b, min_, max_, c, r)
+        args = (x0, x, b, _min, _max, c, r)
 
         qk = self.bfgsb.solve(self.fun_and_jac, params0, bounds, args)
         return self._get_final_delta(
-            qk[0], qk[1], x0, x, b, min_, max_, c, r, touchup=True
+            qk[0], qk[1], x0, x, b, _min, _max, c, r, touchup=True
         )
 
     def optimize_boundary_s_t_trustregion_fun_and_jac(
-        self, params, x0, x, b, min_, max_, c, r
+        self, params, x0, x, b, _min, _max, c, r
     ):
         N = x0.shape[0]
         s = -np.sign(c)
@@ -239,10 +236,10 @@ class Optimizer(object):  # pragma: no cover
         for n in range(N):
             d = -s * b[n] * t
 
-            if d < min_ - x[n]:
-                d = min_ - x[n]
-            elif d > max_ - x[n]:
-                d = max_ - x[n]
+            if d < _min[n] - x[n]:
+                d = _min[n] - x[n]
+            elif d > _max[n] - x[n]:
+                d = _max[n] - x[n]
             else:
                 grad_mu += (b[n] + 2 * _mu * d) * (b[n] / (2 * _mu ** 2 + EPS))
 
@@ -259,7 +256,7 @@ class Optimizer(object):  # pragma: no cover
         else:
             return -nominator / EPS
 
-    def optimize_boundary_s_t_trustregion(self, x0, x, b, min_, max_, c, r):
+    def optimize_boundary_s_t_trustregion(self, x0, x, b, _min, _max, c, r):
         """ Find the solution to the optimization problem
 
             min_delta sign(c) b^T delta s.t. ||delta||_2^2 <= r^2 AND min_ <= x + delta <= max_
@@ -270,7 +267,7 @@ class Optimizer(object):  # pragma: no cover
             Optimal delta: delta = - sign(c) * b / (2 * mu)
         """
         params0 = np.array([1.0])
-        args = (x0, x, b, min_, max_, c, r)
+        args = (x0, x, b, _min, _max, c, r)
         bounds = np.array([(0, np.inf)])
 
         qk = self.bfgsb.solve(
@@ -280,10 +277,10 @@ class Optimizer(object):  # pragma: no cover
         _delta = self.safe_div(-b, 2 * qk[0])
 
         for n in range(x0.shape[0]):
-            if _delta[n] < min_ - x[n]:
-                _delta[n] = min_ - x[n]
-            elif _delta[n] > max_ - x[n]:
-                _delta[n] = max_ - x[n]
+            if _delta[n] < _min[n] - x[n]:
+                _delta[n] = _min[n] - x[n]
+            elif _delta[n] > _max[n] - x[n]:
+                _delta[n] = _max[n] - x[n]
 
         return _delta
 
@@ -376,7 +373,6 @@ class BrendelBethgeAttack(Attack, LabelMixin):
         z = ep.astensor(_model(x.raw))
         return restore_type(z)
 
-
     def get_is_adversarial(self, y):
 
         def is_adversarial(perturbed):
@@ -392,7 +388,7 @@ class BrendelBethgeAttack(Attack, LabelMixin):
 
         return is_adversarial
 
-    def perturb(self, x, starting_points, y=None):
+    def perturb(self, x, starting_points, y=None, mask=None):
 
         """Applies the Brendel & Bethge attack.
 
@@ -406,6 +402,7 @@ class BrendelBethgeAttack(Attack, LabelMixin):
         y : label tensor.
             - if None and self.targeted=False, compute y as predicted labels.
             - if self.targeted=True, then y must be the targeted labels.
+        mask: mask tensor.
         """
         originals, classes = self._verify_and_process_inputs(x, y)
         originals, restore_type = ep.astensor_(originals)
@@ -420,7 +417,16 @@ class BrendelBethgeAttack(Attack, LabelMixin):
         # TODO: Implement more efficient search with breaking condition
         N = len(originals)
         rows = range(N)
-        min_, max_ = self.clip_min, self.clip_max
+
+        if mask is None:
+            min_, max_ = ep.full_like(originals, self.clip_min), ep.full_like(originals, self.clip_max)
+        else:
+            mask = ep.astensor(mask)
+            min_ = ep.where(mask == 1, 0, originals)
+            max_ = ep.where(mask == 1, 1, originals)
+
+        min_np_flatten = min_.numpy().reshape((N, -1))
+        max_np_flatten = max_.numpy().reshape((N, -1))
 
         x0 = originals
         x0_np_flatten = x0.numpy().reshape((N, -1))
@@ -465,7 +471,8 @@ class BrendelBethgeAttack(Attack, LabelMixin):
         lrs = self.lr * np.ones(N)
         lr_reduction_interval = max(1, int(self.steps / self.lr_num_decay))
         converged = np.zeros(N, dtype=np.bool)
-        rate_normalization = np.prod(x.shape) * (max_ - min_)
+        counter = np.zeros(N, dtype=np.bool)
+        rate_normalization = (max_ - min_).numpy().sum()
         original_shape = x.shape
         _best_advs = best_advs.numpy()
 
@@ -492,6 +499,11 @@ class BrendelBethgeAttack(Attack, LabelMixin):
                 _closer = closer.numpy().flatten()
                 for idx in np.arange(N)[_closer]:
                     _best_advs[idx] = x_np_flatten[idx].reshape(original_shape[1:])
+
+            counter = np.where(closer.numpy().flatten(), 0, counter + 1)
+            converged = counter > 10
+            # print(step, converged, counter)
+            # 100 steps: [0.08128784 0.04055694 0.05031109 0.0882149  0.0354948]
 
             best_advs = ep.from_numpy(x, _best_advs)
 
@@ -530,11 +542,13 @@ class BrendelBethgeAttack(Attack, LabelMixin):
                     _x0 = x0_np_flatten[sample]
                     _x = x_np_flatten[sample]
                     _b = boundary[k].flatten()
+                    _min = min_np_flatten[sample]
+                    _max = max_np_flatten[sample]
                     _c = corr_logits_diffs[k]
                     r = region[sample]
 
                     delta = self._optimizer.solve(  # type: ignore
-                        _x0, _x, _b, min_, max_, _c, r
+                        _x0, _x, _b, _min, _max, _c, r
                     )
                     deltas.append(delta)
 
@@ -562,8 +576,8 @@ class BrendelBethgeAttack(Attack, LabelMixin):
         x0: ep.Tensor,
         x1: ep.Tensor,
         epsilons: ep.Tensor,
-        min_: float,
-        max_: float
+        min_,
+        max_
     ) -> ep.Tensor:
         raise NotImplementedError
 
@@ -601,8 +615,8 @@ class LinfinityBrendelBethgeAttack(BrendelBethgeAttack):
         x0: ep.Tensor,
         x1: ep.Tensor,
         epsilons: ep.Tensor,
-        min_: float,
-        max_: float
+        min_,
+        max_
     ):
         # returns a point between x0 and x1 where
         # epsilon = 0 returns x0 and epsilon = 1
@@ -1222,7 +1236,7 @@ else:
 @jitclass(spec=spec)
 class LinfOptimizer(Optimizer):
     def optimize_distance_s_t_boundary_and_trustregion(
-        self, x0, x, b, min_, max_, c, r
+        self, x0, x, b, _min, _max, c, r
     ):
         """ Find the solution to the optimization problem
 
@@ -1231,15 +1245,15 @@ class LinfOptimizer(Optimizer):
         params0 = np.array([0.0, 0.0])
         bounds = np.array([(-np.inf, np.inf), (0, np.inf)])
 
-        return self.binary_search(params0, bounds, x0, x, b, min_, max_, c, r)
+        return self.binary_search(params0, bounds, x0, x, b, _min, _max, c, r)
 
     def binary_search(
-        self, q0, bounds, x0, x, b, min_, max_, c, r, etol=1e-6, maxiter=1000
+        self, q0, bounds, x0, x, b, _min, _max, c, r, etol=1e-3, maxiter=1000
     ):
         # perform binary search over epsilon
-        epsilon = (max_ - min_) / 2.0
-        eps_low = min_
-        eps_high = max_
+        epsilon = (_max - _min) / 2.0
+        eps_low = _min
+        eps_high = _max
         func_calls = 0
 
         bnorm = np.linalg.norm(b)
@@ -1247,9 +1261,9 @@ class LinfOptimizer(Optimizer):
 
         k = 0
 
-        while eps_high - eps_low > etol:
+        while np.sum(eps_high - eps_low) > etol:
             fun, nfev, _lambda0 = self.fun(
-                epsilon, x0, x, b, min_, max_, c, r, lambda0=lambda0
+                epsilon, x0, x, b, _min, _max, c, r, lambda0=lambda0
             )
             func_calls += nfev
             if fun > -np.inf:
@@ -1267,7 +1281,7 @@ class LinfOptimizer(Optimizer):
                 break
 
         delta = self._get_final_delta(
-            lambda0, eps_high, x0, x, b, min_, max_, c, r, touchup=True
+            lambda0, eps_high, x0, x, b, _min, _max, c, r, touchup=True
         )
         return delta
 
@@ -1276,16 +1290,16 @@ class LinfOptimizer(Optimizer):
         _ell = np.empty_like(x0)
         _u = np.empty_like(x0)
         for i in range(N):
-            nx, px = x0[i] - epsilon, x0[i] + epsilon
-            if nx > ell:
+            nx, px = x0[i] - epsilon[i], x0[i] + epsilon[i]
+            if nx > ell[i]:
                 _ell[i] = nx
             else:
-                _ell[i] = ell
+                _ell[i] = ell[i]
 
-            if px < u:
+            if px < u[i]:
                 _u[i] = px
             else:
-                _u[i] = u
+                _u[i] = u[i]
 
         return _ell, _u
 
@@ -1369,7 +1383,7 @@ class LinfOptimizer(Optimizer):
                 if norm > r ** 2:
                     return -np.inf, k, _lambda
                 else:
-                    return -epsilon, k, _lambda
+                    return -np.sum(epsilon), k, _lambda
             else:
                 # update lambda according to active variables
                 if _c > c:

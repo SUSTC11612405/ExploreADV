@@ -28,7 +28,7 @@ from .base import Attack, LabelMixin
 from utils import rand_init_delta
 
 
-def perturb_iterative(xvar, yvar, predict, nb_iter, eps, eps_iter, loss_fn,
+def perturb_iterative(xvar, yvar, predict, nb_iter, eps, eps_iter, loss_fn, mask=None,
                       delta_init=None, minimize=False, ord=np.inf,
                       clip_min=0.0, clip_max=1.0,
                       l1_sparsity=None):
@@ -43,6 +43,7 @@ def perturb_iterative(xvar, yvar, predict, nb_iter, eps, eps_iter, loss_fn,
     :param eps: maximum distortion.
     :param eps_iter: attack step size.
     :param loss_fn: loss function.
+    :param mask: mask tensor.
     :param delta_init: (optional) tensor contains the random initialization.
     :param minimize: (optional bool) whether to minimize or maximize the loss.
     :param ord: (optional) the order of maximum distortion (inf or 2).
@@ -59,8 +60,8 @@ def perturb_iterative(xvar, yvar, predict, nb_iter, eps, eps_iter, loss_fn,
     else:
         delta = torch.zeros_like(xvar)
 
-    sigma = sigma_map(xvar.data)
-    mask = np.ceil(sigma)
+    if mask is None:
+        mask = np.ones_like(xvar.data)
 
     delta.requires_grad_()
     for ii in range(nb_iter):
@@ -160,7 +161,7 @@ class PGDAttack(Attack, LabelMixin):
         assert is_float_or_torch_tensor(self.eps_iter)
         assert is_float_or_torch_tensor(self.eps)
 
-    def perturb(self, x, y=None):
+    def perturb(self, x, y=None, mask=None):
         """
         Given examples (x, y), returns their adversarial counterparts with
         an attack length of eps.
@@ -170,6 +171,7 @@ class PGDAttack(Attack, LabelMixin):
                   - if None and self.targeted=False, compute y as predicted
                     labels.
                   - if self.targeted=True, then y must be the targeted labels.
+        :param mask: mask tensor.
         :return: tensor containing perturbed inputs.
         """
         x, y = self._verify_and_process_inputs(x, y)
@@ -188,7 +190,7 @@ class PGDAttack(Attack, LabelMixin):
             loss_fn=self.loss_fn, minimize=self.targeted,
             ord=self.ord, clip_min=self.clip_min,
             clip_max=self.clip_max, delta_init=delta,
-            l1_sparsity=self.l1_sparsity,
+            l1_sparsity=self.l1_sparsity, mask=mask
         )
 
         return rval.data

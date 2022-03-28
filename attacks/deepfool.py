@@ -19,7 +19,7 @@ from __future__ import unicode_literals
 
 from utils import batch_clamp, clamp
 from utils import replicate_input, replicate_input_withgrad
-from utils import sigma_map, project_region
+from utils import project_region
 
 import torch as torch
 import numpy as np
@@ -112,13 +112,14 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
         y = replicate_input(y)
         return x, y
 
-    def perturb(self, x, y=None):
+    def perturb(self, x, y=None, mask=None):
         """
         Given examples (x, y), returns their adversarial counterparts with
         an attack length of eps.
 
         :param x: input tensor.
         :param y: label tensor.
+        :param mask: mask tensor.
         :return: tensor containing perturbed inputs.
         """
         x, y = self._verify_and_process_inputs(x, y)
@@ -136,9 +137,10 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
         N = len(x)
         rows = range(N)
 
-        # mask = np.ones_like(x.data)
-        sigma = sigma_map(x.data)
-        mask = np.ceil(sigma)
+        if mask is None:
+            mask = np.ones_like(x.data)
+
+        # copy mask for each classes
         mask = np.expand_dims(mask, axis=1)
 
         x0 = x

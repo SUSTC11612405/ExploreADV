@@ -39,95 +39,88 @@ for background, _ in shap_loader:
     break
 background = background.to(device)
 
-batch_size = 10
+batch_size = 3
 loader = get_mnist_test_loader(batch_size=batch_size)
 # loader = get_cifar10_test_loader(batch_size=batch_size)
 for cln_data, true_label in loader:
-    break
+    if (predict_from_logits(model(cln_data)) == true_label).all():
+        break
 cln_data, true_label = cln_data.to(device), true_label.to(device)
 # print(cln_data)
 # print(true_label)
 
-# e = get_shap_explainer(model, background)
-# mask = get_shap_mask(cln_data.data, e, 0.5)
-mask = get_sigma_mask(cln_data.data, 0.5)
-# mask = get_combined_mask(cln_data.data, e, 0.5)
-# exit(0)
-
-# target = torch.tensor([9, 1, 7, 6, 9])
-
-# adversary = LinfPGDAttack(
-#     model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0,
-#     nb_iter=1000, eps_iter=0.01, rand_init=False, clip_min=0.0, clip_max=1.0,
-#     targeted=True)
-#
-# adv_untargeted = adversary.perturb(cln_data, target, mask)
-correct = predict_from_logits(model(cln_data)) == true_label
-cln_data = cln_data[correct]
-true_label = true_label[correct]
-mask = mask[correct]
-
-batch_size = cln_data.shape[0]
-
-adversary = DeepfoolLinfAttack(
-    model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
-
-adv_untargeted = adversary.perturb(cln_data, true_label)#, mask)
-
-# adv_untargeted, update_num = tr.tr_attack_iter(model, cln_data, true_label, 0.001, p=8, iter=2000)
-# print(adv_untargeted.shape, update_num)
-
-print(true_label)
-# print(target)
-print(predict_from_logits(model(cln_data)))
-print(predict_from_logits(model(adv_untargeted)))
-
-# apply the Brendel & Bethge attack
-attack = LinfinityBrendelBethgeAttack(model, steps=100)
+e = get_shap_explainer(model, background)
+mask_I = get_shap_mask(cln_data.data, e, 0.5)
+mask_V = get_sigma_mask(cln_data.data, 0.5)
+mask_C = get_combined_mask(cln_data.data, e, 0.5)
 
 
-BB_adversarials = attack.perturb(cln_data, adv_untargeted)#, mask=mask)
+def get_adv(data, label, mask):
+    attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
+    starting_points = attack_df.perturb(cln_data, label, mask=mask)
+    attack = LinfinityBrendelBethgeAttack(model, steps=100)
+    adv = attack.perturb(cln_data, starting_points, mask=mask)
+
+    diff_adv = np.abs(adv.numpy() - data.numpy())
+    epsilon = np.max(diff_adv, axis=(1, 2, 3))
+
+    return adv, epsilon
 
 
-# diff_pgd_adv = np.abs(adv_untargeted.numpy() - cln_data.numpy())
-# print('PGD_adv:\t', np.max(diff_pgd_adv, axis=(1,2,3)))
+adv, epsilon = get_adv(cln_data, true_label, None)
+adv_I, epsilon_I = get_adv(cln_data, true_label, mask_I)
+adv_V, epsilon_V = get_adv(cln_data, true_label, mask_V)
+adv_C, epsilon_C = get_adv(cln_data, true_label, mask_C)
 
-diff_df_adv = np.abs(adv_untargeted.numpy() - cln_data.numpy())
-epsilon_df = np.max(diff_df_adv, axis=(1,2,3))
-print('Deepfool_adv:\t', epsilon_df)
 
-diff_bb = np.abs(BB_adversarials.numpy() - cln_data.numpy())
-epsilon_bb = np.max(diff_bb, axis=(1,2,3))
-print('BB refined DF:\t', epsilon_bb)
 
-pixels_changed = np.sum(np.amax(diff_bb > 1e-10, axis=1), axis=(1, 2))
-print('Pixels changed: ', pixels_changed)
 
-### Visualization of attacks
+# MNIST
+names = list(range(10))
+# Cifar10
+# names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
 
-pred_cln = predict_from_logits(model(cln_data))
-# pred_pgd = predict_from_logits(model(adv_untargeted))
-pred_df = predict_from_logits(model(adv_untargeted))
-pred_bb = predict_from_logits(model(BB_adversarials))
+idx2name = lambda indexes: [names[i] for i in indexes]
+
+pred_cln = idx2name(predict_from_logits(model(cln_data)))
+pred_adv = idx2name(predict_from_logits(model(adv)))
+pred_I = idx2name(predict_from_logits(model(adv_I)))
+pred_V = idx2name(predict_from_logits(model(adv_V)))
+pred_C = idx2name(predict_from_logits(model(adv_C)))
 
 plt.figure(figsize=(10, 8))
 for ii in range(batch_size):
-    plt.subplot(4, batch_size, ii + 1)
+    # clean image and all-pixel adversarial
+    plt.subplot(4, 2 * batch_size, 2 * ii + 1)
     _imshow(cln_data[ii])
     plt.title("clean \n pred: {}".format(pred_cln[ii]))
-    plt.subplot(4, batch_size, ii + 1 + batch_size)
-    _imshow(mask[ii])
-    plt.title("mask of {}:".format(pred_cln[ii]))
-    # _imshow(torch.tensor(diff_bb[ii]))
-    # plt.title("difference of {}:".format(pred_cln[ii]))
-    plt.subplot(4, batch_size, ii + 1 + 2 * batch_size)
-    _imshow(adv_untargeted[ii])
-    plt.title("Deepfool \n pred: {} \n epsilon: {:.2}".format(
-        pred_df[ii], epsilon_df[ii]))
-    plt.subplot(4, batch_size, ii + 1 + 3 * batch_size)
-    _imshow(BB_adversarials[ii])
-    plt.title("BB refined \n pred: {} \n epsilon: {:.2}".format(
-        pred_bb[ii], epsilon_bb[ii]))
+    plt.subplot(4, 2 * batch_size, 2 * ii + 2)
+    _imshow(adv[ii])
+    plt.title("adversarial \n pred: {} \n epsilon: {:.2}".format(pred_adv[ii], epsilon[ii]))
+
+    # importance map and 50%-pixel adversarial
+    plt.subplot(4, 2 * batch_size, 2 * batch_size + 2 * ii + 1)
+    _imshow(mask_I[ii])
+    plt.title("importance map")
+    plt.subplot(4, 2 * batch_size, 2 * batch_size + 2 * ii + 2)
+    _imshow(adv_I[ii])
+    plt.title("adversarial \n pred: {} \n epsilon: {:.2}".format(pred_I[ii], epsilon_I[ii]))
+
+    # importance map and 50%-pixel adversarial
+    plt.subplot(4, 2 * batch_size, 4 * batch_size + 2 * ii + 1)
+    _imshow(mask_V[ii])
+    plt.title("variance map")
+    plt.subplot(4, 2 * batch_size, 4 * batch_size + 2 * ii + 2)
+    _imshow(adv_V[ii])
+    plt.title("adversarial \n pred: {} \n epsilon: {:.2}".format(pred_V[ii], epsilon_V[ii]))
+
+    # importance map and 50%-pixel adversarial
+    plt.subplot(4, 2 * batch_size, 6 * batch_size + 2 * ii + 1)
+    _imshow(mask_C[ii])
+    plt.title("combined map")
+    plt.subplot(4, 2 * batch_size, 6 * batch_size + 2 * ii + 2)
+    _imshow(adv_C[ii])
+    plt.title("adversarial \n pred: {} \n epsilon: {:.2}".format(pred_C[ii], epsilon_C[ii]))
 
 plt.tight_layout()
 plt.show()

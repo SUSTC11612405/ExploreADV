@@ -333,7 +333,7 @@ class BrendelBethgeAttack(Attack, LabelMixin):
     """
 
     def __init__(self, predict, loss_fn=None, overshoot: float = 1.1, steps: int = 1000,
-                 lr: float = 1e-3, lr_decay: float = 0.5, lr_num_decay: int = 20,
+                 lr: float = 0.1, lr_decay: float = 0.4, lr_num_decay: int = 20,
                  momentum: float = 0.8, binary_search_steps: int = 10,
                  clip_min=0., clip_max=1., targeted=False
     ):
@@ -381,7 +381,7 @@ class BrendelBethgeAttack(Attack, LabelMixin):
             del perturbed, outputs
             classes = outputs_.argmax(axis=-1)
             if self.targeted:
-                is_adv = classes = y
+                is_adv = classes == y
             else:
                 is_adv = classes != y
             return restore_type(is_adv)
@@ -422,8 +422,8 @@ class BrendelBethgeAttack(Attack, LabelMixin):
             min_, max_ = ep.full_like(originals, self.clip_min), ep.full_like(originals, self.clip_max)
         else:
             mask = ep.astensor(mask)
-            min_ = ep.where(mask == 1, 0, originals)
-            max_ = ep.where(mask == 1, 1, originals)
+            min_ = ep.where(mask > 0, 0, originals)
+            max_ = ep.where(mask > 0, 1, originals)
 
         min_np_flatten = min_.numpy().reshape((N, -1))
         max_np_flatten = max_.numpy().reshape((N, -1))
@@ -472,7 +472,7 @@ class BrendelBethgeAttack(Attack, LabelMixin):
         lr_reduction_interval = max(1, int(self.steps / self.lr_num_decay))
         converged = np.zeros(N, dtype=np.bool)
         counter = np.zeros(N, dtype=np.bool)
-        rate_normalization = (max_ - min_).numpy().sum()
+        rate_normalization = (max_ - min_).numpy().sum(axis=(1,2,3))
         original_shape = x.shape
         _best_advs = best_advs.numpy()
 

@@ -3,9 +3,9 @@ import torch
 import torch.nn as nn
 
 from utils import predict_from_logits
-from dataloader import get_mnist_test_loader, get_cifar10_test_loader
+from dataloader import get_mnist_test_loader, get_mnist_train_loader, get_cifar10_test_loader, get_cifar10_train_loader
 from utils import _imshow
-from region_proposal import get_sigma_mask
+from region_proposal import get_sigma_mask, get_shap_mask, get_shap_explainer, get_combined_mask
 import onnx
 from onnx2pytorch import ConvertModel
 from attacks import LinfPGDAttack, DeepfoolLinfAttack, LinfinityBrendelBethgeAttack
@@ -21,6 +21,8 @@ device = torch.device("cuda" if use_cuda else "cpu")
 # path_to_onnx_model = "./models/mnist_relu_6_100.onnx"
 path_to_onnx_model = "./models/mnist_relu_9_200.onnx"
 # path_to_onnx_model = "./models/cifar10_2_255.onnx"
+# path_to_onnx_model = "./models/convBigRELU__DiffAI_cifar10.onnx"
+# path_to_onnx_model = "./models/ResNet18_PGD_cifar10.onnx"
 
 onnx_model = onnx.load(path_to_onnx_model)
 pytorch_model = ConvertModel(onnx_model, experimental=True)
@@ -31,31 +33,60 @@ model.eval()
 
 print(model)
 
-batch_size = 5
+shap_loader = get_mnist_train_loader(batch_size=100)
+# shap_loader = get_cifar10_train_loader(batch_size=100)
+for background, _ in shap_loader:
+    break
+background = background.to(device)
+
+batch_size = 10
 loader = get_mnist_test_loader(batch_size=batch_size)
 # loader = get_cifar10_test_loader(batch_size=batch_size)
 for cln_data, true_label in loader:
     break
 cln_data, true_label = cln_data.to(device), true_label.to(device)
 # print(cln_data)
-print(true_label)
+# print(true_label)
 
-mask = get_sigma_mask(cln_data.data)
+# e = get_shap_explainer(model, background)
+# mask = get_shap_mask(cln_data.data, e, 0.5)
+mask = get_sigma_mask(cln_data.data, 0.5)
+# mask = get_combined_mask(cln_data.data, e, 0.5)
+# exit(0)
+
+# target = torch.tensor([9, 1, 7, 6, 9])
 
 # adversary = LinfPGDAttack(
-#     model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=0.63,
-#     nb_iter=100, eps_iter=0.01, rand_init=True, clip_min=0.0, clip_max=1.0,
-#     targeted=False)
+#     model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0,
+#     nb_iter=1000, eps_iter=0.01, rand_init=False, clip_min=0.0, clip_max=1.0,
+#     targeted=True)
+#
+# adv_untargeted = adversary.perturb(cln_data, target, mask)
+correct = predict_from_logits(model(cln_data)) == true_label
+cln_data = cln_data[correct]
+true_label = true_label[correct]
+mask = mask[correct]
+
+batch_size = cln_data.shape[0]
 
 adversary = DeepfoolLinfAttack(
-    model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=0.58)
+    model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
 
-adv_untargeted = adversary.perturb(cln_data, true_label, mask)
+adv_untargeted = adversary.perturb(cln_data, true_label)#, mask)
+
+# adv_untargeted, update_num = tr.tr_attack_iter(model, cln_data, true_label, 0.001, p=8, iter=2000)
+# print(adv_untargeted.shape, update_num)
+
+print(true_label)
+# print(target)
+print(predict_from_logits(model(cln_data)))
+print(predict_from_logits(model(adv_untargeted)))
 
 # apply the Brendel & Bethge attack
 attack = LinfinityBrendelBethgeAttack(model, steps=100)
 
-BB_adversarials = attack.perturb(cln_data, adv_untargeted, mask=mask)
+
+BB_adversarials = attack.perturb(cln_data, adv_untargeted)#, mask=mask)
 
 
 # diff_pgd_adv = np.abs(adv_untargeted.numpy() - cln_data.numpy())
@@ -68,6 +99,9 @@ print('Deepfool_adv:\t', epsilon_df)
 diff_bb = np.abs(BB_adversarials.numpy() - cln_data.numpy())
 epsilon_bb = np.max(diff_bb, axis=(1,2,3))
 print('BB refined DF:\t', epsilon_bb)
+
+pixels_changed = np.sum(np.amax(diff_bb > 1e-10, axis=1), axis=(1, 2))
+print('Pixels changed: ', pixels_changed)
 
 ### Visualization of attacks
 
@@ -84,6 +118,8 @@ for ii in range(batch_size):
     plt.subplot(4, batch_size, ii + 1 + batch_size)
     _imshow(mask[ii])
     plt.title("mask of {}:".format(pred_cln[ii]))
+    # _imshow(torch.tensor(diff_bb[ii]))
+    # plt.title("difference of {}:".format(pred_cln[ii]))
     plt.subplot(4, batch_size, ii + 1 + 2 * batch_size)
     _imshow(adv_untargeted[ii])
     plt.title("Deepfool \n pred: {} \n epsilon: {:.2}".format(

@@ -68,6 +68,7 @@ def sigma_map(x):
 def project_region(mask, data):
     x = data.numpy()
     x = np.where(mask, x, 0)
+    # x = np.clip(x, -mask, mask)
     return torch.tensor(x)
 
 

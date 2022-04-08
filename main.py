@@ -3,7 +3,9 @@ import torch
 import torch.nn as nn
 
 from utils import predict_from_logits
-from dataloader import get_mnist_test_loader, get_mnist_train_loader, get_cifar10_test_loader, get_cifar10_train_loader
+from dataloader import get_mnist_test_loader, get_mnist_train_loader
+from dataloader import get_cifar10_test_loader, get_cifar10_train_loader
+from dataloader import get_stl10_train_loader, get_stl10_test_loader
 from utils import _imshow
 from region_proposal import get_sigma_mask, get_shap_mask, get_shap_explainer, get_combined_mask
 import onnx
@@ -17,15 +19,18 @@ device = torch.device("cuda" if use_cuda else "cpu")
 
 
 # path_to_onnx_model = "./models/convSmallRELU__Point.onnx"
-
 # path_to_onnx_model = "./models/mnist_relu_6_100.onnx"
-path_to_onnx_model = "./models/mnist_relu_9_200.onnx"
+# path_to_onnx_model = "./models/mnist_relu_9_200.onnx"
+
 # path_to_onnx_model = "./models/cifar10_2_255.onnx"
 # path_to_onnx_model = "./models/convBigRELU__DiffAI_cifar10.onnx"
 # path_to_onnx_model = "./models/ResNet18_PGD_cifar10.onnx"
 
-onnx_model = onnx.load(path_to_onnx_model)
-pytorch_model = ConvertModel(onnx_model, experimental=True)
+# onnx_model = onnx.load(path_to_onnx_model)
+
+from stl10 import stl10
+pytorch_model = stl10(32, pretrained=True)
+# pytorch_model = ConvertModel(onnx_model, experimental=True)
 
 model = pytorch_model
 model.to(device)
@@ -33,15 +38,17 @@ model.eval()
 
 print(model)
 
-shap_loader = get_mnist_train_loader(batch_size=100)
+# shap_loader = get_mnist_train_loader(batch_size=100)
 # shap_loader = get_cifar10_train_loader(batch_size=100)
+shap_loader = get_stl10_train_loader(batch_size=100)
 for background, _ in shap_loader:
     break
 background = background.to(device)
 
 batch_size = 3
-loader = get_mnist_test_loader(batch_size=batch_size)
+# loader = get_mnist_test_loader(batch_size=batch_size)
 # loader = get_cifar10_test_loader(batch_size=batch_size)
+loader = get_stl10_test_loader(batch_size=batch_size)
 for cln_data, true_label in loader:
     if (predict_from_logits(model(cln_data)) == true_label).all():
         break
@@ -76,9 +83,9 @@ adv_C, epsilon_C = get_adv(cln_data, true_label, mask_C)
 
 
 # MNIST
-names = list(range(10))
+# names = list(range(10))
 # Cifar10
-# names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
+names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
 
 idx2name = lambda indexes: [names[i] for i in indexes]
 

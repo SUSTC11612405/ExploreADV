@@ -49,3 +49,21 @@ def get_cifar10_test_loader(batch_size, shuffle=False):
         batch_size=batch_size, shuffle=shuffle)
     loader.name = "cifar10_test"
     return loader
+
+
+def get_stl10_train_loader(batch_size, shuffle=True):
+    loader = torch.utils.data.DataLoader(
+        datasets.STL10(DATA_PATH, split='train', download=True,
+                       transform=transforms.ToTensor()),
+        batch_size=batch_size, shuffle=shuffle)
+    loader.name = "stl10_train"
+    return loader
+
+
+def get_stl10_test_loader(batch_size, shuffle=False):
+    loader = torch.utils.data.DataLoader(
+        datasets.STL10(DATA_PATH, split='test', download=True,
+                         transform=transforms.ToTensor()),
+        batch_size=batch_size, shuffle=shuffle)
+    loader.name = "stl10_test"
+    return loader

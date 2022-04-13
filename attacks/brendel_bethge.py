@@ -472,7 +472,7 @@ class BrendelBethgeAttack(Attack, LabelMixin):
         lr_reduction_interval = max(1, int(self.steps / self.lr_num_decay))
         converged = np.zeros(N, dtype=np.bool)
         counter = np.zeros(N, dtype=np.bool)
-        rate_normalization = (max_ - min_).numpy().sum(axis=(1,2,3))
+        rate_normalization = (max_np_flatten - min_np_flatten).sum(axis=-1)
         original_shape = x.shape
         _best_advs = best_advs.numpy()
 

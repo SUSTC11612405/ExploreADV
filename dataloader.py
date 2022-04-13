@@ -7,8 +7,8 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 
-ROOT_PATH = os.path.expanduser("~/.advertorch")
-DATA_PATH = os.path.join(ROOT_PATH, "data")
+ROOT_PATH = os.path.expanduser(".")
+DATA_PATH = os.path.join(ROOT_PATH, "dataset")
 
 
 def mkdir(directory):

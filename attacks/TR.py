@@ -15,7 +15,7 @@ from copy import deepcopy
 #################################################
 ## Select TR Attack Index 
 #################################################
-def select_index(model, data, c = 9, p = 2, worst_case = False):
+def select_index(model, data, c = 9, p = 8, worst_case = False):
     '''
     Select the attack target class 
     '''
@@ -64,7 +64,7 @@ def select_index(model, data, c = 9, p = 2, worst_case = False):
 #################################################
 ## TR First Order Attack
 #################################################
-def tr_attack(model, data, true_ind, target_ind, eps, p = 2):
+def tr_attack(model, data, true_ind, target_ind, eps, p = 8):
     """Generate an adversarial pertubation using the TR method.
     Pick the top false label and perturb towards that.
     First-order attack
@@ -110,7 +110,7 @@ def tr_attack(model, data, true_ind, target_ind, eps, p = 2):
     return X_adv
 
             
-def tr_attack_iter(model, data, target, eps, c = 9, p = 2, iter = 100, worst_case = False):
+def tr_attack_iter(model, data, target, eps, c = 9, p = 8, iter = 100, worst_case = False):
     X_adv = data.detach().clone()
     data_copy = data.detach().clone()
     target_ind = select_index(model, data_copy, c = c,p = p, worst_case = worst_case)
@@ -135,7 +135,7 @@ def tr_attack_iter(model, data, target, eps, c = 9, p = 2, iter = 100, worst_cas
 #################################################
 ## TR First Order Attack Adaptive
 #################################################
-def tr_attack_adaptive(model, data, true_ind, target_ind, eps, p = 2):
+def tr_attack_adaptive(model, data, true_ind, target_ind, eps, p = 8):
     """Generate an adversarial pertubation using the TR method with adaptive
     trust radius.
     Args:
@@ -223,7 +223,7 @@ def tr_attack_adaptive(model, data, true_ind, target_ind, eps, p = 2):
     eps = eps.view(n, -1)
     return X_adv, eps
 
-def tr_attack_adaptive_iter(model, data, target, eps, c = 9, p = 2, iter = 100, worst_case = False):
+def tr_attack_adaptive_iter(model, data, target, eps, c = 9, p = 8, iter = 100, worst_case = False):
     X_adv = data.detach().clone()
     data_copy = data.detach().clone()
     target_ind = select_index(model, data_copy, c=c,p=p, worst_case = worst_case)

@@ -23,7 +23,7 @@ from utils import batch_multiply
 from utils import batch_clamp
 from utils import replicate_input
 from utils import batch_l1_proj
-from utils import sigma_map, project_region
+from utils import project_region
 from .base import Attack, LabelMixin
 from utils import rand_init_delta
 

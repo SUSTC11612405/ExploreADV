@@ -181,7 +181,6 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
             assert p_step.shape == x0.shape
 
             p_total += p_step
-            # p_total = project_region(mask, p_total.data)
             p_total = batch_clamp(self.eps, p_total)
 
             # don't do anything for those that are already adversarial

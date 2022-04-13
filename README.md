@@ -1,4 +1,15 @@
 # CEXCustomized
+| sample | delta = epsilon | delta = 0 | 0 < delta < epsilon |
+| ---- | ---- | ---- | ---- |
+|MNIST sample 1|480 |269 |35|
+|MNIST sample 2|448 |296 |40|
+|MNIST sample 3|453 |321 |10|
+|MNIST sample 4|486 |249 |49|
+|MNIST sample 5|426 |337 |21|
+|CIFAR10 sample 1|3062 |0 |10|
+|CIFAR10 sample 2|2875 |0 |40|
+|CIFAR10 sample 3|3013 |4 |55|
+
 
 ### MNIST
 | method | mnist_relu_9_200 | mnist_relu_6_100 | convSmallRELU__Point |
@@ -16,7 +27,7 @@
 | method | ffnnRELU__Point_6_500 | convSmallRELU__Point | ResNet18_PGD |
 | ---- | ---- | ---- | ---- |
 | DEEPFOOL | 0.01328 | 0.008010 | 0.04297 |
-| FAB | 0.008917 | 0.007489 | 0.03434 |
+| FAB | 0.008917 | 0.007489 | 0.03434, 0.03458(alpha_max=0) |
 | BB | 0.009386 | 0.007895 | 0.03629 |
 | Ours | 0.008189 | 0.007383 | 0.03451 |
 | Ours-I (50% pixels) | 0.01657 | 0.01210 | 0.05569 |

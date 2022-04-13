@@ -38,33 +38,6 @@ def _imshow(img):
     plt.axis("off")
 
 
-def sigma_map(x):
-    """ creates the sigma-map for the batch x (# samples * channels * width * height)"""
-    x = x.numpy()
-    sh = [4]
-    sh.extend(x.shape)
-    t = np.zeros(sh)
-    t[0, :, :, :-1] = x[:, :, 1:]
-    t[0, :, :, -1] = x[:, :, -1]
-    t[1, :, :, 1:] = x[:, :, :-1]
-    t[1, :, :, 0] = x[:, :, 0]
-    t[2, :, :, :, :-1] = x[:, :, :, 1:]
-    t[2, :, :, :, -1] = x[:, :, :, -1]
-    t[3, :, :, :, 1:] = x[:, :, :, :-1]
-    t[3, :, :, :, 0] = x[:, :, :, 0]
-
-    mean1 = (t[0] + x + t[1]) / 3
-    sd1 = np.sqrt(((t[0] - mean1) ** 2 + (x - mean1) ** 2 + (t[1] - mean1) ** 2) / 3)
-
-    mean2 = (t[2] + x + t[3]) / 3
-    sd2 = np.sqrt(((t[2] - mean2) ** 2 + (x - mean2) ** 2 + (t[3] - mean2) ** 2) / 3)
-
-    sd = np.minimum(sd1, sd2)
-    sd = np.sqrt(sd)
-
-    return sd
-
-
 def project_region(mask, data):
     x = data.numpy()
     x = np.where(mask, x, 0)

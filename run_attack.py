@@ -11,15 +11,34 @@ from region_proposal import get_region_mask, get_combined_mask
 from utils import predict_from_logits, _imshow
 import matplotlib.pyplot as plt
 
+
+def load_model(dataset, path):
+    if path.endswith('onnx'):
+        # load the ONNX model and convert to Pytorch model
+        onnx_model = onnx.load(path)
+        pytorch_model = ConvertModel(onnx_model, experimental=True)
+    elif dataset == 'stl10':
+        from stl10 import stl10
+        pytorch_model = stl10(32, pretrained=True)
+    else:
+        error = "Only onnx models and a stl10 model supported"
+        raise NotImplementedError(error)
+    model = pytorch_model
+    model.to(device)
+    model.eval()
+
+    return model
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Define hyperparameters.')
-    parser.add_argument('--dataset', type=str, default='cifar10', help='cifar10, mnist')
-    parser.add_argument('--path_model', type=str, default='./models/cifar10_2_255.onnx', help='path to the onnx model')
+    parser.add_argument('--dataset', type=str, default='cifar10', help='cifar10, mnist, stl10')
+    parser.add_argument('--path_model', type=str, default='./models/cifar10_2_255.onnx', help='path to the trained model')
     parser.add_argument('--eps', type=float, default=1.0, help='max perturbation size on each pixel')
-    parser.add_argument('--region', type=str, default='whole', help='whole, top, bottom, left, right, center')
+    parser.add_argument('--region', type=str, default='select', help='whole, top, bottom, left, right, select')
     parser.add_argument('--ratio', type=float, default=1.0, help='ratio of pixels allowed to perturb')
     parser.add_argument('--imperceivable', action="store_true", help='whether to have imperceivable perturbation')
-    parser.add_argument('--n_examples', type=int, default=5)
+    parser.add_argument('--n_examples', type=int, default=7)
     parser.add_argument('--data_dir', type=str, default='./dataset')
 
     args = parser.parse_args()
@@ -28,22 +47,25 @@ if __name__ == '__main__':
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    # load the ONNX model and convert to Pytorch model
-    onnx_model = onnx.load(args.path_model)
-    pytorch_model = ConvertModel(onnx_model, experimental=True)
-    model = pytorch_model
-    model.to(device)
-    model.eval()
+    # load model
+    model = load_model(args.dataset, args.path_model)
 
     # load data
     if args.dataset == 'mnist':
         from dataloader import get_mnist_test_loader
         loader = get_mnist_test_loader(batch_size=args.n_examples)
         names = list(range(10))
-    else:
+    elif args.dataset == 'cifar10':
         from dataloader import get_cifar10_test_loader
         loader = get_cifar10_test_loader(batch_size=args.n_examples)
         names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
+    elif args.dataset == 'stl10':
+        from dataloader import get_stl10_test_loader
+        loader = get_stl10_test_loader(batch_size=args.n_examples)
+        names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
+    else:
+        error = "Only mnist, cifar10, stl10 data supported"
+        raise NotImplementedError(error)
 
     for cln_data, true_label in loader:
             break
@@ -59,17 +81,29 @@ if __name__ == '__main__':
     pred_cln = pred_cln[correct]
 
     # generate masks
-    masks = [get_region_mask(cln_data.data, args.region)]
+    masks = []
+    if args.region == 'select':
+        from draw import region_selector
+        masks.append(region_selector(cln_data))
+    else:
+        masks.append(get_region_mask(cln_data.data, args.region))
     if args.imperceivable:
         from region_proposal import get_sigma_mask
         masks.append(get_sigma_mask(cln_data.data))
     combined_mask = get_combined_mask(masks, args.ratio)
 
     # run attack
+    # run Deepfool
     attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
-    starting_points = attack_df.perturb(cln_data, true_label, mask=combined_mask)
-    attack = LinfinityBrendelBethgeAttack(model, steps=100)
-    adv = attack.perturb(cln_data, starting_points, mask=combined_mask)
+    adv = attack_df.perturb(cln_data, true_label, mask=combined_mask)
+
+    pred_df = predict_from_logits(model(adv))
+    df_found = ~torch.eq(true_label, pred_df)
+
+    # run BB
+    attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
+    adv_bb = attack_bb.perturb(cln_data[df_found], adv[df_found], mask=combined_mask[df_found])
+    adv[df_found] = adv_bb
 
     diff_adv = torch.abs(adv - cln_data)
     epsilon = torch.amax(diff_adv, dim=(1, 2, 3))
@@ -82,13 +116,15 @@ if __name__ == '__main__':
     true_label = true_label[found]
     cln_data = cln_data[found]
     adv = adv[found]
+    diff_adv = diff_adv[found]
+    epsilon = epsilon[found]
     pred_cln = pred_cln[found]
     pred_adv = pred_adv[found]
 
     # visualize the results
     idx2name = lambda idx: names[idx]
 
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(8, 10))
     for ii in range(count_found):
         # clean image
         plt.subplot(3, count_found, ii+1)

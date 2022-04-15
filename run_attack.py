@@ -13,13 +13,16 @@ import matplotlib.pyplot as plt
 
 
 def load_model(dataset, path):
-    if path.endswith('onnx'):
+    if dataset in ['mnist', 'cifar10'] and path.endswith('onnx'):
         # load the ONNX model and convert to Pytorch model
         onnx_model = onnx.load(path)
         pytorch_model = ConvertModel(onnx_model, experimental=True)
     elif dataset == 'stl10':
         from stl10 import stl10
         pytorch_model = stl10(32, pretrained=True)
+    elif dataset == 'imagenet':
+        from torchvision.models import resnet18, efficientnet_b3
+        pytorch_model = efficientnet_b3(pretrained=True)
     else:
         error = "Only onnx models and a stl10 model supported"
         raise NotImplementedError(error)
@@ -30,15 +33,57 @@ def load_model(dataset, path):
     return model
 
 
+def get_dataloader_with_names(dataset, n_examples):
+    if dataset == 'mnist':
+        from dataloader import get_mnist_test_loader
+        loader = get_mnist_test_loader(batch_size=n_examples)
+        names = list(range(10))
+    elif dataset == 'cifar10':
+        from dataloader import get_cifar10_test_loader
+        loader = get_cifar10_test_loader(batch_size=n_examples)
+        names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
+    elif dataset == 'stl10':
+        from dataloader import get_stl10_test_loader
+        loader = get_stl10_test_loader(batch_size=n_examples)
+        names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
+    elif dataset == 'imagenet':
+        from dataloader import get_imagenet_val_loader, load_imagenet_class_names
+        loader = get_imagenet_val_loader(batch_size=n_examples)
+        names = load_imagenet_class_names()
+    else:
+        error = "Only mnist, cifar10, stl10, imagenet data supported"
+        raise NotImplementedError(error)
+    return loader, names
+
+
+def get_shap_loader(dataset, n_examples=100):
+    if dataset == 'mnist':
+        from dataloader import get_mnist_train_loader
+        loader = get_mnist_train_loader(batch_size=n_examples)
+    elif dataset == 'cifar10':
+        from dataloader import get_cifar10_train_loader
+        loader = get_cifar10_train_loader(batch_size=n_examples)
+    elif dataset == 'stl10':
+        from dataloader import get_stl10_train_loader
+        loader = get_stl10_train_loader(batch_size=n_examples)
+    elif dataset == 'imagenet':
+        from dataloader import get_imagenet_val_loader, load_imagenet_class_names
+        loader = get_imagenet_val_loader(batch_size=n_examples)
+    else:
+        error = "Only mnist, cifar10, stl10, imagenet data supported"
+        raise NotImplementedError(error)
+    return loader
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Define hyperparameters.')
     parser.add_argument('--dataset', type=str, default='cifar10', help='cifar10, mnist, stl10')
     parser.add_argument('--path_model', type=str, default='./models/cifar10_2_255.onnx', help='path to the trained model')
     parser.add_argument('--eps', type=float, default=1.0, help='max perturbation size on each pixel')
-    parser.add_argument('--region', type=str, default='select', help='whole, top, bottom, left, right, select')
+    parser.add_argument('--region', type=str, default='whole', help='whole, top, bottom, left, right, select')
     parser.add_argument('--ratio', type=float, default=1.0, help='ratio of pixels allowed to perturb')
     parser.add_argument('--imperceivable', action="store_true", help='whether to have imperceivable perturbation')
-    parser.add_argument('--n_examples', type=int, default=7)
+    parser.add_argument('--n_examples', type=int, default=5)
     parser.add_argument('--data_dir', type=str, default='./dataset')
 
     args = parser.parse_args()
@@ -51,21 +96,7 @@ if __name__ == '__main__':
     model = load_model(args.dataset, args.path_model)
 
     # load data
-    if args.dataset == 'mnist':
-        from dataloader import get_mnist_test_loader
-        loader = get_mnist_test_loader(batch_size=args.n_examples)
-        names = list(range(10))
-    elif args.dataset == 'cifar10':
-        from dataloader import get_cifar10_test_loader
-        loader = get_cifar10_test_loader(batch_size=args.n_examples)
-        names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
-    elif args.dataset == 'stl10':
-        from dataloader import get_stl10_test_loader
-        loader = get_stl10_test_loader(batch_size=args.n_examples)
-        names = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
-    else:
-        error = "Only mnist, cifar10, stl10 data supported"
-        raise NotImplementedError(error)
+    loader, names = get_dataloader_with_names(args.dataset, args.n_examples)
 
     for cln_data, true_label in loader:
             break
@@ -90,6 +121,14 @@ if __name__ == '__main__':
     if args.imperceivable:
         from region_proposal import get_sigma_mask
         masks.append(get_sigma_mask(cln_data.data))
+    if args.ratio != 1.0:
+        from region_proposal import get_shap_mask, get_shap_explainer
+        shap_loader = get_shap_loader(args.dataset)
+        for background, _ in shap_loader:
+            break
+        background = background.to(device)
+        e = get_shap_explainer(model, background)
+        masks.append(get_shap_mask(cln_data.data, e))
     combined_mask = get_combined_mask(masks, args.ratio)
 
     # run attack
@@ -99,6 +138,10 @@ if __name__ == '__main__':
 
     pred_df = predict_from_logits(model(adv))
     df_found = ~torch.eq(true_label, pred_df)
+    count_df_found = torch.count_nonzero(df_found).item()
+    if count_df_found == 0:
+        print("Attack success rate: 0.0%(0/{})".format(count_correct))
+        exit(0)
 
     # run BB
     attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
@@ -124,7 +167,7 @@ if __name__ == '__main__':
     # visualize the results
     idx2name = lambda idx: names[idx]
 
-    plt.figure(figsize=(8, 10))
+    plt.figure(figsize=(10, 8))
     for ii in range(count_found):
         # clean image
         plt.subplot(3, count_found, ii+1)

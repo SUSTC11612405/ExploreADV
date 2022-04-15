@@ -67,3 +67,32 @@ def get_stl10_test_loader(batch_size, shuffle=False):
         batch_size=batch_size, shuffle=shuffle)
     loader.name = "stl10_test"
     return loader
+
+
+def get_imagenet_val_loader(batch_size, shuffle=True):
+    path = os.path.join(DATA_PATH, 'imagenet/val')
+
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+
+    loader = torch.utils.data.DataLoader(
+        datasets.ImageFolder(
+            path,
+            transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor()
+                # normalize,
+            ])),
+        batch_size=batch_size, shuffle=shuffle)
+    loader.name = "imagenet_val"
+    return loader
+
+
+def load_imagenet_class_names():
+    import json
+    path = os.path.join(DATA_PATH, 'imagenet/imagenet_class_index.json')
+    with open(path) as f:
+        class_names = json.load(f)
+    names = [class_names[str(i)][1] for i in range(len(class_names))]
+    return names

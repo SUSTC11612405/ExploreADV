@@ -16,6 +16,14 @@ def quantile(a, q):
     return np.where(a > q, a, 0.0)
 
 
+def topk(a, k):
+    N = a.shape[0]
+    a_copy = np.reshape(a, (N, -1))
+    k_th = np.partition(a_copy, -k, axis=1)[:, -k, None]
+    a_copy = np.where(a_copy < k_th, 0.0, a_copy)
+    return np.reshape(a_copy, a.shape)
+
+
 def sigma_map(x):
     """ creates the sigma-map for the batch x (# samples * channels * width * height)"""
     x = x.numpy()
@@ -82,4 +90,6 @@ def get_combined_mask(masks, ratio):
         mask = masks[0]
     if ratio < 1.0:
         mask = quantile(mask, 1.0 - ratio)
+    elif ratio > 1.0:
+        mask = topk(mask, int(ratio))
     return torch.tensor(mask)

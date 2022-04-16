@@ -7,6 +7,7 @@ import onnx
 from onnx2pytorch import ConvertModel
 
 from attacks import DeepfoolLinfAttack, LinfinityBrendelBethgeAttack
+from eval.eval_metric import PerceptualDistance
 from region_proposal import get_region_mask, get_combined_mask
 from utils import predict_from_logits, _imshow
 import matplotlib.pyplot as plt
@@ -163,6 +164,16 @@ if __name__ == '__main__':
     epsilon = epsilon[found]
     pred_cln = pred_cln[found]
     pred_adv = pred_adv[found]
+
+    # calculate metrics
+    PerD = PerceptualDistance(args.dataset)
+    distance = PerD.cal_perceptual_distances(cln_data, adv)
+    PerD.update(distance, adv.size(0))
+    PerD.print_metric()
+    # mnist_9_200 --imperceivable l2: 7.95, l_inf: 0.27, ssim: 0.89
+    # mnist_9_200 l2: 2.23, l_inf: 0.06, ssim: 0.82
+    # cifar10_2_255 --imperceivable --ratio 0.5 l2: 4.08, l_inf: 0.05, ssim: 0.96, CIEDE2000: 222.80
+    # ResNet18_PGD_cifar10 l2: 3.17, l_inf: 0.03, ssim: 0.95, CIEDE2000: 140.14
 
     # visualize the results
     idx2name = lambda idx: names[idx]

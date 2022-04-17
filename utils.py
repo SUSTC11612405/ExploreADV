@@ -38,11 +38,28 @@ def _imshow(img):
     plt.axis("off")
 
 
+def _imshow_diff(img):
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap
+    img = bchw2bhwc(img.detach().cpu().numpy())
+    max_val = np.max(np.abs(img))
+    if img.shape[2] == 1:
+        img = np.repeat(img, 3, axis=2)
+    colors = []
+    for l in np.linspace(1, 0, 100):
+        colors.append((30. / 255, 136. / 255, 229. / 255, l))
+    for l in np.linspace(0, 1, 100):
+        colors.append((255. / 255, 13. / 255, 87. / 255, l))
+    red_transparent_blue = LinearSegmentedColormap.from_list("red_transparent_blue", colors)
+    plt.imshow(img, cmap=red_transparent_blue, vmin=-max_val, vmax=max_val)
+    plt.axis("off")
+
+
 def project_region(mask, data):
-    x = data.numpy()
-    x = np.where(mask, x, 0)
-    # x = np.clip(x, -mask, mask)
-    return torch.tensor(x)
+    # x = data.numpy()
+    # x = np.where(mask, x, 0)
+    zero = torch.zeros_like(mask)
+    return torch.where(mask > zero, data, zero)
 
 
 def flatten(x: ep.Tensor, keep: int = 1) -> ep.Tensor:

@@ -22,7 +22,6 @@ from utils import replicate_input, replicate_input_withgrad
 from utils import project_region
 
 import torch as torch
-import numpy as np
 from .base import Attack, LabelMixin
 
 
@@ -42,7 +41,7 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
     :param clip_max: maximum value per input dimension.
     """
 
-    def __init__(self, predict, num_classes=None, nb_iter=50, eps=0.1,
+    def __init__(self, predict, num_classes=None, nb_iter=50, eps=0.1, loosen_rate=1.1, loosen_num=10,
                  overshoot=0.02, clip_min=0., clip_max=1., loss_fn=None,
                  targeted=False):
         """
@@ -57,6 +56,8 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
         self.num_classes = num_classes
         self.nb_iter = nb_iter
         self.eps = eps
+        self.loosen_rate = loosen_rate
+        self.loosen_num = loosen_num
         self.overshoot = overshoot
         self.targeted = targeted
 
@@ -138,14 +139,16 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
         rows = range(N)
 
         if mask is None:
-            mask = np.ones_like(x.data)
+            mask = torch.ones_like(x)
 
         # copy mask for each classes
-        mask = np.expand_dims(mask, axis=1)
+        # mask = np.expand_dims(mask, axis=1)
 
         x0 = x
         p_total = torch.zeros_like(x)
-        for _ in range(self.nb_iter):
+        for itr in range(self.nb_iter):
+            if itr > 0 and itr % self.loosen_num == 0:
+                mask = mask * self.loosen_rate
             # let's first get the logits using k = 1 to see if we are done
             diffs = [self.get_grads(x, 1, classes)]
 
@@ -157,7 +160,8 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
 
             deltas = torch.stack([d['deltas'] for d in diffs], dim=-1)
             grads = torch.stack([d['grads'] for d in diffs], dim=1)
-            grads = project_region(mask, grads)
+            expand_mask = torch.unsqueeze(mask, dim=1)
+            grads = project_region(expand_mask, grads)
             assert deltas.shape == (N, self.num_classes - 1)
             assert grads.shape == (N, self.num_classes - 1) + x0.shape[1:]
 
@@ -181,6 +185,7 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
             assert p_step.shape == x0.shape
 
             p_total += p_step
+            p_total = clamp(p_total, min=-mask, max=mask)
             p_total = batch_clamp(self.eps, p_total)
 
             # don't do anything for those that are already adversarial

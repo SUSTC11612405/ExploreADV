@@ -10,8 +10,8 @@ class PerceptualDistance(object):
 
         self.SSIM = SSIM()
 
-        self.avg = {'l2': 0, 'l_inf': 0, 'ssim': 0}
-        self.sum = {'l2': 0, 'l_inf': 0, 'ssim': 0}
+        self.avg = {'l0': 0, 'l2': 0, 'l_inf': 0, 'ssim': 0}
+        self.sum = {'l0': 0, 'l2': 0, 'l_inf': 0, 'ssim': 0}
 
         if self.dataset != 'mnist':
             self.avg['CIEDE2000'] = 0
@@ -25,6 +25,7 @@ class PerceptualDistance(object):
         # l_p norm
         N = references.size(0)
         noise = (perturbed - references).flatten(start_dim=1)
+        distance['l0'] = torch.sum(torch.count_nonzero(noise, dim=-1)) / N
         distance['l2'] = torch.sum(torch.pow(torch.norm(noise, p=2, dim=-1), 2)) / N
         distance['l_inf'] = torch.sum(torch.norm(noise, p=float('inf'), dim=-1)) / N
 

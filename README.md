@@ -1,4 +1,25 @@
 # CEXCustomized
+
+### imperceivable
+| model | imperceivable | precision | attack success rate | l_0 | l_2 | l_inf | ssim | CIEDE2000|
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| mnist_relu_9_200 | no | 97%(97/100) | 100%(97/97) | 507.14 | 2.23 | 0.06 | 0.82 |
+| mnist_relu_9_200 | yes | 97%(97/100) | 49%(48/97) | 134.62 | 3.28 | 0.28 | 0.95 |
+| mnist_convSmallRELU | no | 100%(100/100) | 100%(100/100) | 401.45 | 9.09 |  0.15 | 0.72 |
+| mnist_convSmallRELU | yes | 100%(100/100) | 36%(36/100) | 138.25 | 3.87 | 0.32 | 0.94 |
+| cifar10_ResNet18_PGD | no | 83%(83/100) | 100%(83/83) | 3051.73 | 5.27 |  0.04 | 0.93 | 162.50 |
+| cifar10_ResNet18_PGD | yes | 83%(83/100) | 77%(64/83) | 2893.23 | 2.76 |  0.08 | 0.97 | 113.11 |
+| cifar10_2_255 | no | 18%(18/100) | 100%(18/18) | 3063.11 | 8.45 |  0.05 | 0.90 | 240.95 |
+| cifar10_2_255 | yes | 18%(18/100) | 56%(10/18) | 2982.60 | 4.80 |  0.15 | 0.96 | 183.77 |
+| stl10 | no | 34%(34/100) | 100%(34/34) | 27381.77 | 1.42 |  0.01 | 0.98 | 149.80 |
+| stl10 | yes | 34%(34/100) | 97%(33/34) | 24997.39 | 0.88 |  0.01 | 1.00 | 93.18 |
+
+![mnist_imperc](images/mnist_imperc.png)
+
+![cifar10_resnet18_imperc](images/cifar10_resnet18_imperc.png)
+
+
+### BB statistics
 | sample | delta = epsilon | delta = 0 | 0 < delta < epsilon |
 | ---- | ---- | ---- | ---- |
 |MNIST sample 1|480 |269 |35|

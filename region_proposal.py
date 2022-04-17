@@ -13,14 +13,14 @@ def normalize(a):
 def quantile(a, q):
     axis = (1, 2, 3)
     q = np.quantile(a, q, axis=axis, keepdims=True)
-    return np.where(a > q, a, 0.0)
+    return np.where(a > q, 1.0, 0.0)
 
 
 def topk(a, k):
     N = a.shape[0]
     a_copy = np.reshape(a, (N, -1))
     k_th = np.partition(a_copy, -k, axis=1)[:, -k, None]
-    a_copy = np.where(a_copy < k_th, 0.0, a_copy)
+    a_copy = np.where(a_copy <= k_th, 0.0, 1.0)
     return np.reshape(a_copy, a.shape)
 
 
@@ -46,7 +46,7 @@ def sigma_map(x):
     sd2 = np.sqrt(((t[2] - mean2) ** 2 + (x - mean2) ** 2 + (t[3] - mean2) ** 2) / 3)
 
     sd = np.minimum(sd1, sd2)
-    sd = np.sqrt(sd)
+    # sd = np.sqrt(sd)
 
     return sd
 
@@ -63,8 +63,6 @@ def get_shap_explainer(model, background):
 def get_shap_mask(data, explainer):
     shap_values, indexes = explainer.shap_values(data, ranked_outputs=1)
     shap_mask = np.abs(shap_values[0])
-    # print(mask.shape)
-    # print(np.max(mask))
     return shap_mask
 
 
@@ -83,13 +81,11 @@ def get_region_mask(data, region):
 
 
 def get_combined_mask(masks, ratio):
-
-    if len(masks) > 1:
-        mask = normalize(np.prod(masks, axis=0))
-    else:
-        mask = masks[0]
+    mask = masks['region']
+    if 'sigma' in masks:
+        mask *= masks['sigma']
     if ratio < 1.0:
-        mask = quantile(mask, 1.0 - ratio)
+        mask *= quantile(masks['shap'], 1.0 - ratio)
     elif ratio > 1.0:
-        mask = topk(mask, int(ratio))
-    return torch.tensor(mask)
+        mask *= topk(masks['shap'], int(ratio))
+    return torch.tensor(mask, dtype=torch.float32)

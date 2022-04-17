@@ -9,7 +9,7 @@ from onnx2pytorch import ConvertModel
 from attacks import DeepfoolLinfAttack, LinfinityBrendelBethgeAttack
 from eval.eval_metric import PerceptualDistance
 from region_proposal import get_region_mask, get_combined_mask
-from utils import predict_from_logits, _imshow
+from utils import predict_from_logits, _imshow, _imshow_diff
 import matplotlib.pyplot as plt
 
 
@@ -22,8 +22,8 @@ def load_model(dataset, path):
         from stl10 import stl10
         pytorch_model = stl10(32, pretrained=True)
     elif dataset == 'imagenet':
-        from torchvision.models import resnet18, efficientnet_b3
-        pytorch_model = efficientnet_b3(pretrained=True)
+        from torchvision.models import resnet18, efficientnet_b3, mobilenet_v2
+        pytorch_model = mobilenet_v2(pretrained=True)
     else:
         error = "Only onnx models and a stl10 model supported"
         raise NotImplementedError(error)
@@ -113,15 +113,15 @@ if __name__ == '__main__':
     pred_cln = pred_cln[correct]
 
     # generate masks
-    masks = []
+    masks = {}
     if args.region == 'select':
         from draw import region_selector
-        masks.append(region_selector(cln_data))
+        masks['region'] = region_selector(cln_data)
     else:
-        masks.append(get_region_mask(cln_data.data, args.region))
+        masks['region'] = get_region_mask(cln_data.data, args.region)
     if args.imperceivable:
         from region_proposal import get_sigma_mask
-        masks.append(get_sigma_mask(cln_data.data))
+        masks['sigma'] = get_sigma_mask(cln_data.data)
     if args.ratio != 1.0:
         from region_proposal import get_shap_mask, get_shap_explainer
         shap_loader = get_shap_loader(args.dataset)
@@ -129,7 +129,7 @@ if __name__ == '__main__':
             break
         background = background.to(device)
         e = get_shap_explainer(model, background)
-        masks.append(get_shap_mask(cln_data.data, e))
+        masks['shap'] = get_shap_mask(cln_data.data, e)
     combined_mask = get_combined_mask(masks, args.ratio)
 
     # run attack
@@ -140,6 +140,7 @@ if __name__ == '__main__':
     pred_df = predict_from_logits(model(adv))
     df_found = ~torch.eq(true_label, pred_df)
     count_df_found = torch.count_nonzero(df_found).item()
+    print("Deepfool attack success rate: {:.0%}({}/{})".format(count_df_found / count_correct, count_df_found, count_correct))
     if count_df_found == 0:
         print("Attack success rate: 0.0%(0/{})".format(count_correct))
         exit(0)
@@ -149,8 +150,8 @@ if __name__ == '__main__':
     adv_bb = attack_bb.perturb(cln_data[df_found], adv[df_found], mask=combined_mask[df_found])
     adv[df_found] = adv_bb
 
-    diff_adv = torch.abs(adv - cln_data)
-    epsilon = torch.amax(diff_adv, dim=(1, 2, 3))
+    diff_adv = adv - cln_data
+    epsilon = torch.amax(torch.abs(diff_adv), dim=(1, 2, 3))
 
     pred_adv = predict_from_logits(model(adv))
     found = torch.logical_and(~torch.eq(true_label, pred_adv), torch.lt(epsilon, args.eps))
@@ -170,27 +171,63 @@ if __name__ == '__main__':
     distance = PerD.cal_perceptual_distances(cln_data, adv)
     PerD.update(distance, adv.size(0))
     PerD.print_metric()
-    # mnist_9_200 --imperceivable l2: 7.95, l_inf: 0.27, ssim: 0.89
-    # mnist_9_200 l2: 2.23, l_inf: 0.06, ssim: 0.82
-    # cifar10_2_255 --imperceivable --ratio 0.5 l2: 4.08, l_inf: 0.05, ssim: 0.96, CIEDE2000: 222.80
-    # ResNet18_PGD_cifar10 l2: 3.17, l_inf: 0.03, ssim: 0.95, CIEDE2000: 140.14
 
-    # visualize the results
+    # non-imperceivable
+    start = attack_df.perturb(cln_data, true_label)
+    adv_normal = attack_bb.perturb(cln_data, start)
+    diff_adv_normal = adv_normal - cln_data
+    pred_adv_normal = predict_from_logits(model(adv_normal))
+    epsilon_normal = torch.amax(torch.abs(diff_adv_normal), dim=(1, 2, 3))
+
+    PerD2 = PerceptualDistance(args.dataset)
+    distance = PerD2.cal_perceptual_distances(cln_data, adv_normal)
+    PerD2.update(distance, adv.size(0))
+    PerD2.print_metric()
+
     idx2name = lambda idx: names[idx]
 
     plt.figure(figsize=(10, 8))
     for ii in range(count_found):
         # clean image
-        plt.subplot(3, count_found, ii+1)
+        plt.subplot(3, count_found * 2, 2 * ii + 1)
         _imshow(cln_data[ii])
         plt.title("clean \n pred: {}".format(idx2name(pred_cln[ii])))
         # adv image
-        plt.subplot(3, count_found, count_found + ii+1)
+        plt.subplot(3, count_found * 2, 2 * count_found + 2 * ii + 1)
+        _imshow(adv_normal[ii])
+        plt.title("minimal adv \n pred: {}".format(idx2name(pred_adv_normal[ii])))
+        # adv difference
+        plt.subplot(3, count_found * 2, 2 * count_found + 2 * ii + 2)
+        _imshow_diff(diff_adv_normal[ii])
+        plt.title("Difference \n epsilon: {:.2}".format(epsilon_normal[ii]))
+        # imperceivable adv image
+        plt.subplot(3, count_found * 2, 4 * count_found + 2 * ii + 1)
         _imshow(adv[ii])
-        plt.title("adversarial \n pred: {}".format(idx2name(pred_adv[ii])))
-        # adv image
-        plt.subplot(3, count_found, 2 * count_found + ii+1)
-        _imshow(diff_adv[ii])
+        plt.title("imperceivable adv \n pred: {}".format(idx2name(pred_adv[ii])))
+        # imperceivable adv difference
+        plt.subplot(3, count_found * 2, 4 * count_found + 2 * ii + 2)
+        _imshow_diff(diff_adv[ii])
         plt.title("Difference \n epsilon: {:.2}".format(epsilon[ii]))
     plt.tight_layout()
     plt.show()
+
+    # visualize the results
+    visualize = False
+    if visualize:
+        idx2name = lambda idx: names[idx]
+        plt.figure(figsize=(10, 8))
+        for ii in range(count_found):
+            # clean image
+            plt.subplot(3, count_found, ii+1)
+            _imshow(cln_data[ii])
+            plt.title("clean \n pred: {}".format(idx2name(pred_cln[ii])))
+            # adv image
+            plt.subplot(3, count_found, count_found + ii+1)
+            _imshow(adv[ii])
+            plt.title("adversarial \n pred: {}".format(idx2name(pred_adv[ii])))
+            # adv difference
+            plt.subplot(3, count_found, 2 * count_found + ii+1)
+            _imshow(diff_adv[ii])
+            plt.title("Difference \n epsilon: {:.2}".format(epsilon[ii]))
+        plt.tight_layout()
+        plt.show()

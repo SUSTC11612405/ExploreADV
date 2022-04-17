@@ -422,8 +422,10 @@ class BrendelBethgeAttack(Attack, LabelMixin):
             min_, max_ = ep.full_like(originals, self.clip_min), ep.full_like(originals, self.clip_max)
         else:
             mask = ep.astensor(mask)
-            min_ = ep.where(mask > 0, 0, originals)
-            max_ = ep.where(mask > 0, 1, originals)
+            # min_ = ep.where(mask > 0, 0, originals)
+            # max_ = ep.where(mask > 0, 1, originals)
+            min_ = ep.where(mask > 0, ep.maximum(originals - mask, 0), originals)
+            max_ = ep.where(mask > 0, ep.minimum(originals + mask, 1), originals)
 
         min_np_flatten = min_.numpy().reshape((N, -1))
         max_np_flatten = max_.numpy().reshape((N, -1))

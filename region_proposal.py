@@ -86,6 +86,8 @@ def get_combined_mask(masks, ratio):
         mask *= masks['sigma']
     if ratio < 1.0:
         mask *= quantile(masks['shap'], 1.0 - ratio)
+        # random_mask = np.random.rand(*masks['region'].shape)
+        # mask *= quantile(random_mask, 1.0 - ratio)
     elif ratio > 1.0:
         mask *= topk(masks['shap'], int(ratio))
     return torch.tensor(mask, dtype=torch.float32)

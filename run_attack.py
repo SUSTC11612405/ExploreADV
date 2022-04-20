@@ -150,8 +150,8 @@ if __name__ == '__main__':
     adv_bb = attack_bb.perturb(cln_data[df_found], adv[df_found], mask=combined_mask[df_found])
     adv[df_found] = adv_bb
 
-    diff_adv = adv - cln_data
-    epsilon = torch.amax(torch.abs(diff_adv), dim=(1, 2, 3))
+    diff_adv = torch.abs(adv - cln_data)
+    epsilon = torch.amax(diff_adv, dim=(1, 2, 3))
 
     pred_adv = predict_from_logits(model(adv))
     found = torch.logical_and(~torch.eq(true_label, pred_adv), torch.lt(epsilon, args.eps))
@@ -172,47 +172,60 @@ if __name__ == '__main__':
     PerD.update(distance, adv.size(0))
     PerD.print_metric()
 
-    # non-imperceivable
-    start = attack_df.perturb(cln_data, true_label)
-    adv_normal = attack_bb.perturb(cln_data, start)
-    diff_adv_normal = adv_normal - cln_data
-    pred_adv_normal = predict_from_logits(model(adv_normal))
-    epsilon_normal = torch.amax(torch.abs(diff_adv_normal), dim=(1, 2, 3))
+    # resnet18
+    # bottom    l0: 1535.11, l2: 11.79, l_inf: 0.08, ssim: 0.93, CIEDE2000: 185.11
+    # top       l0: 1534.22, l2: 10.51, l_inf: 0.07, ssim: 0.91, CIEDE2000: 207.04
+    # left      l0: 1535.00, l2: 12.18, l_inf: 0.07, ssim: 0.91, CIEDE2000: 205.18
+    # right     l0: 1534.06, l2: 8.89, l_inf: 0.07, ssim: 0.93, CIEDE2000: 191.68
+    # I         l0: 1534.67, l2: 6.02, l_inf: 0.06, ssim: 0.93, CIEDE2000: 173.57
+    # I+V 14/18 l0: 1535.71, l2: 1.93, l_inf: 0.07, ssim: 0.97, CIEDE2000: 105.08
+    # I2        l0: 1534.61, l2: 6.60, l_inf: 0.06, ssim: 0.92, CIEDE2000: 177.91
 
-    PerD2 = PerceptualDistance(args.dataset)
-    distance = PerD2.cal_perceptual_distances(cln_data, adv_normal)
-    PerD2.update(distance, adv.size(0))
-    PerD2.print_metric()
+    # 0.1 rand 13/18    l0: 307.77, l2: 13.39, l_inf: 0.21, ssim: 0.85, CIEDE2000: 282.39
+    # 0.1 shap 18/18    l0: 307.83, l2: 12.60, l_inf: 0.23, ssim: 0.86, CIEDE2000: 222.90
+    # 0.1 sigma 15/18   l0: 307.80, l2: 9.82, l_inf: 0.20, ssim: 0.92, CIEDE2000: 194.58
 
-    idx2name = lambda idx: names[idx]
-
-    plt.figure(figsize=(10, 8))
-    for ii in range(count_found):
-        # clean image
-        plt.subplot(3, count_found * 2, 2 * ii + 1)
-        _imshow(cln_data[ii])
-        plt.title("clean \n pred: {}".format(idx2name(pred_cln[ii])))
-        # adv image
-        plt.subplot(3, count_found * 2, 2 * count_found + 2 * ii + 1)
-        _imshow(adv_normal[ii])
-        plt.title("minimal adv \n pred: {}".format(idx2name(pred_adv_normal[ii])))
-        # adv difference
-        plt.subplot(3, count_found * 2, 2 * count_found + 2 * ii + 2)
-        _imshow_diff(diff_adv_normal[ii])
-        plt.title("Difference \n epsilon: {:.2}".format(epsilon_normal[ii]))
-        # imperceivable adv image
-        plt.subplot(3, count_found * 2, 4 * count_found + 2 * ii + 1)
-        _imshow(adv[ii])
-        plt.title("imperceivable adv \n pred: {}".format(idx2name(pred_adv[ii])))
-        # imperceivable adv difference
-        plt.subplot(3, count_found * 2, 4 * count_found + 2 * ii + 2)
-        _imshow_diff(diff_adv[ii])
-        plt.title("Difference \n epsilon: {:.2}".format(epsilon[ii]))
-    plt.tight_layout()
-    plt.show()
+    # # non-imperceivable
+    # start = attack_df.perturb(cln_data, true_label)
+    # adv_normal = attack_bb.perturb(cln_data, start)
+    # diff_adv_normal = adv_normal - cln_data
+    # pred_adv_normal = predict_from_logits(model(adv_normal))
+    # epsilon_normal = torch.amax(torch.abs(diff_adv_normal), dim=(1, 2, 3))
+    #
+    # PerD2 = PerceptualDistance(args.dataset)
+    # distance = PerD2.cal_perceptual_distances(cln_data, adv_normal)
+    # PerD2.update(distance, adv.size(0))
+    # PerD2.print_metric()
+    #
+    # idx2name = lambda idx: names[idx]
+    #
+    # plt.figure(figsize=(10, 8))
+    # for ii in range(count_found):
+    #     # clean image
+    #     plt.subplot(3, count_found * 2, 2 * ii + 1)
+    #     _imshow(cln_data[ii])
+    #     plt.title("clean \n pred: {}".format(idx2name(pred_cln[ii])))
+    #     # adv image
+    #     plt.subplot(3, count_found * 2, 2 * count_found + 2 * ii + 1)
+    #     _imshow(adv_normal[ii])
+    #     plt.title("minimal adv \n pred: {}".format(idx2name(pred_adv_normal[ii])))
+    #     # adv difference
+    #     plt.subplot(3, count_found * 2, 2 * count_found + 2 * ii + 2)
+    #     _imshow_diff(diff_adv_normal[ii])
+    #     plt.title("Difference \n epsilon: {:.2}".format(epsilon_normal[ii]))
+    #     # imperceivable adv image
+    #     plt.subplot(3, count_found * 2, 4 * count_found + 2 * ii + 1)
+    #     _imshow(adv[ii])
+    #     plt.title("imperceivable adv \n pred: {}".format(idx2name(pred_adv[ii])))
+    #     # imperceivable adv difference
+    #     plt.subplot(3, count_found * 2, 4 * count_found + 2 * ii + 2)
+    #     _imshow_diff(diff_adv[ii])
+    #     plt.title("Difference \n epsilon: {:.2}".format(epsilon[ii]))
+    # plt.tight_layout()
+    # plt.show()
 
     # visualize the results
-    visualize = False
+    visualize = True
     if visualize:
         idx2name = lambda idx: names[idx]
         plt.figure(figsize=(10, 8))

@@ -15,7 +15,7 @@ def mkdir(directory):
     pathlib.Path(directory).mkdir(parents=True, exist_ok=True)
 
 
-def get_mnist_train_loader(batch_size, shuffle=True):
+def get_mnist_train_loader(batch_size, shuffle=False):
     loader = torch.utils.data.DataLoader(
         datasets.MNIST(DATA_PATH, train=True, download=True,
                        transform=transforms.ToTensor()),
@@ -33,7 +33,7 @@ def get_mnist_test_loader(batch_size, shuffle=False):
     return loader
 
 
-def get_cifar10_train_loader(batch_size, shuffle=True):
+def get_cifar10_train_loader(batch_size, shuffle=False):
     loader = torch.utils.data.DataLoader(
         datasets.CIFAR10(DATA_PATH, train=True, download=True,
                          transform=transforms.ToTensor()),
@@ -51,7 +51,7 @@ def get_cifar10_test_loader(batch_size, shuffle=False):
     return loader
 
 
-def get_stl10_train_loader(batch_size, shuffle=True):
+def get_stl10_train_loader(batch_size, shuffle=False):
     loader = torch.utils.data.DataLoader(
         datasets.STL10(DATA_PATH, split='train', download=True,
                        transform=transforms.ToTensor()),
@@ -69,7 +69,7 @@ def get_stl10_test_loader(batch_size, shuffle=False):
     return loader
 
 
-def get_imagenet_val_loader(batch_size, shuffle=True):
+def get_imagenet_val_loader(batch_size, shuffle=False):
     path = os.path.join(DATA_PATH, 'imagenet/val')
 
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],

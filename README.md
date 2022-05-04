@@ -1,4 +1,25 @@
 # CEXCustomized
+### regional
+| model | image index | patch size | success rate | importance l_inf | min l_inf | mean l_inf | max l_inf |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| mnist_relu_9_200 | 0 | 10 * 10 | 0.9506 | 0.2807 | 0.2313 | 0.4560 | 0.7941 |
+| mnist_relu_9_200 | 1 | 10 * 10 | 1.0 | 0.1469 | 0.1409 | 0.3014 | 0.7284 |
+| mnist_convSmallRELU | 0 | 10 * 10 | 0.7716 | 0.3748 | 0.3328 | 0.5211 | 0.9668 |
+| mnist_convSmallRELU | 1 | 10 * 10 | 0.8457 | 0.3859 | 0.3838 | 0.5588 | 0.8891 |
+| cifar10_2_255 | 1 | 10 * 10 | 1.0 | 0.1797 | 0.1777 | 0.3518 | 0.7236 | 
+| cifar10_2_255 | 2 | 10 * 10 | 0.9897 | 0.3027 | 0.1725 |  0.3018 | 0.6889 |
+| cifar10_convBigRELU_DiffAI | 1 | 10 * 10 | 1.0 | 0.1823 | 0.09570 | 0.2595 | 0.5752 |
+| cifar10_convBigRELU_DiffAI | 2 | 10 * 10 | 0.9876 | 0.1895 | 0.1240 | 0.3058 | 0.5 |
+| cifar10_ResNet18_PGD | 1 | 10 * 10 | 0.8988 | 0.1963 at (17, 13) | 0.1914 at (18, 13) | 0.4399 | 0.9404 |
+| cifar10_ResNet18_PGD | 2 | 10 * 10 | 1.0 | 0.04439 at (14, 12) | 0.03184 at (20, 11) | 0.2180 | 0.7484 |
+| stl10 | 3 | 10 * 10 | 0.9208 | 0.1641 | 0.06348 | 0.2755 | 0.8701 |
+| stl10 | 7 | 10 * 10 | 0.9932 | 0.01966 | 0.01319 | 0.1080 | 0.9707 |
+
+We exhaustively search all 10 * 10 region in a image and apply attack, record the success rate, (max, mean, min) of the 
+resulting L_inf distances, and the L_inf distances of the region selected by our importance map (our method). We find 
+that our method often select relatively good regions in affordable time. For cifar10_ResNet18_PGD (image size 32 * 32), 
+exhaustive search cost 2150 seconds, while our importance map method cost 27 seconds. 
+For stl10 (image size 96 * 96), exhaustive search cost more than 10000 seconds.
 
 ### imperceivable
 | model | imperceivable | precision | attack success rate | l_0 | l_2 | l_inf | ssim | CIEDE2000|

@@ -187,6 +187,7 @@ class Application(tk.Frame):
         self.confirm_button.grid(row=0, column=3)
 
         self.active_button = self.rectangle_button
+        self.slider.configure(state='disabled')
 
         w, h = 500, 500
         data = tensor.numpy()

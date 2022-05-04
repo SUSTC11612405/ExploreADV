@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import shap
+from captum.attr import IntegratedGradients, NoiseTunnel
 
 
 def normalize(a):
@@ -57,13 +58,44 @@ def get_sigma_mask(data):
 
 
 def get_shap_explainer(model, background):
+    # return shap.GradientExplainer(model, background, local_smoothing=0)
     return shap.DeepExplainer(model, background)
+
+
+def get_dist2boundary_mask(data, _min=0.0, _max=1.0):
+    return np.where(data < 0.5, 0.5 + data, 1.5 - data)
 
 
 def get_shap_mask(data, explainer):
     shap_values, indexes = explainer.shap_values(data, ranked_outputs=1)
     shap_mask = np.abs(shap_values[0])
+    dist = get_dist2boundary_mask(data)
+    shap_mask = shap_mask * dist
     return shap_mask
+
+
+def get_captum_mask(model, data, label):
+    def attribute_image_features(algorithm, input, **kwargs):
+        model.zero_grad()
+        tensor_attributions = algorithm.attribute(input, target=label, **kwargs)
+        return tensor_attributions
+
+    ig = IntegratedGradients(model)
+    nt = NoiseTunnel(ig)
+    attr_ig = attribute_image_features(nt, data, baselines=data * 0, nt_type='smoothgrad_sq',
+                                       nt_samples=10, stdevs=0.2)
+    # attr_ig, delta = attribute_image_features(ig, data, baselines=data * 0, return_convergence_delta=True)
+    dist = get_dist2boundary_mask(data)
+    captum_mask = attr_ig.numpy() * dist
+    return captum_mask
+
+
+def get_nbyn_mask(data, n, x, y):
+    mask = np.zeros_like(data)
+    mask[:, :, x:x+n, y:y+n] = 1.0
+    # sigma = get_sigma_mask(data)
+    # mask = mask * sigma
+    return torch.tensor(mask, dtype=torch.float32)
 
 
 def get_region_mask(data, region):

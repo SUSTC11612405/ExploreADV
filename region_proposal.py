@@ -95,7 +95,7 @@ def get_nbyn_mask(data, n, x, y):
     mask[:, :, x:x+n, y:y+n] = 1.0
     # sigma = get_sigma_mask(data)
     # mask = mask * sigma
-    return torch.tensor(mask, dtype=torch.float32)
+    return torch.tensor(mask)#, dtype=torch.float32)
 
 
 def get_region_mask(data, region):
@@ -117,9 +117,9 @@ def get_combined_mask(masks, ratio):
     if 'sigma' in masks:
         mask *= masks['sigma']
     if ratio < 1.0:
-        mask *= quantile(masks['shap'], 1.0 - ratio)
+        mask *= quantile(masks['importance'], 1.0 - ratio)
         # random_mask = np.random.rand(*masks['region'].shape)
         # mask *= quantile(random_mask, 1.0 - ratio)
     elif ratio > 1.0:
-        mask *= topk(masks['shap'], int(ratio))
-    return torch.tensor(mask, dtype=torch.float32)
+        mask *= topk(masks['importance'], int(ratio))
+    return torch.tensor(mask)#, dtype=torch.float32)

@@ -57,34 +57,15 @@ def get_dataloader_with_names(dataset, n_examples):
     return loader, names
 
 
-def get_shap_loader(dataset, n_examples=100):
-    if dataset == 'mnist':
-        from dataloader import get_mnist_train_loader
-        loader = get_mnist_train_loader(batch_size=n_examples)
-    elif dataset == 'cifar10':
-        from dataloader import get_cifar10_train_loader
-        loader = get_cifar10_train_loader(batch_size=n_examples)
-    elif dataset == 'stl10':
-        from dataloader import get_stl10_train_loader
-        loader = get_stl10_train_loader(batch_size=n_examples)
-    elif dataset == 'imagenet':
-        from dataloader import get_imagenet_val_loader, load_imagenet_class_names
-        loader = get_imagenet_val_loader(batch_size=n_examples)
-    else:
-        error = "Only mnist, cifar10, stl10, imagenet data supported"
-        raise NotImplementedError(error)
-    return loader
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Define hyperparameters.')
-    parser.add_argument('--dataset', type=str, default='cifar10', help='cifar10, mnist, stl10')
-    parser.add_argument('--path_model', type=str, default='./models/cifar10_2_255.onnx', help='path to the trained model')
+    parser.add_argument('--dataset', type=str, default='mnist', help='cifar10, mnist, stl10')
+    parser.add_argument('--path_model', type=str, default='./models/convSmallRELU__Point.onnx', help='path to the trained model')
     parser.add_argument('--eps', type=float, default=1.0, help='max perturbation size on each pixel')
     parser.add_argument('--region', type=str, default='whole', help='whole, top, bottom, left, right, select')
     parser.add_argument('--ratio', type=float, default=1.0, help='ratio of pixels allowed to perturb')
     parser.add_argument('--imperceivable', action="store_true", help='whether to have imperceivable perturbation')
-    parser.add_argument('--n_examples', type=int, default=5)
+    parser.add_argument('--n_examples', type=int, default=100)
     parser.add_argument('--data_dir', type=str, default='./dataset')
 
     args = parser.parse_args()
@@ -123,18 +104,17 @@ if __name__ == '__main__':
         from region_proposal import get_sigma_mask
         masks['sigma'] = get_sigma_mask(cln_data.data)
     if args.ratio != 1.0:
-        from region_proposal import get_shap_mask, get_shap_explainer
-        shap_loader = get_shap_loader(args.dataset)
-        for background, _ in shap_loader:
-            break
-        background = background.to(device)
-        e = get_shap_explainer(model, background)
-        masks['shap'] = get_shap_mask(cln_data.data, e)
+        from region_proposal import get_captum_mask
+        masks['importance'] = get_captum_mask(model, cln_data.data, true_label.data)
     combined_mask = get_combined_mask(masks, args.ratio)
 
     # run attack
     # run Deepfool
-    attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
+    if args.dataset == 'stl10':
+        attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=2.0,
+                                       clip_min=-1., clip_max=1.)
+    else:
+        attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
     adv = attack_df.perturb(cln_data, true_label, mask=combined_mask)
 
     pred_df = predict_from_logits(model(adv))
@@ -146,11 +126,23 @@ if __name__ == '__main__':
         exit(0)
 
     # run BB
-    attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
+    if args.dataset == 'stl10':
+        attack_bb = LinfinityBrendelBethgeAttack(model, steps=100, clip_min=-1., clip_max=1.)
+    else:
+        attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
     adv_bb = attack_bb.perturb(cln_data[df_found], adv[df_found], mask=combined_mask[df_found])
     adv[df_found] = adv_bb
 
-    diff_adv = torch.abs(adv - cln_data)
+    if args.dataset == 'stl10':
+        import torchvision.transforms as transforms
+        invTrans = transforms.Compose([transforms.Normalize(mean=[0., 0., 0.],
+                                                            std=[1 / 0.5, 1 / 0.5, 1 / 0.5]),
+                                       transforms.Normalize(mean=[-0.5, -0.5, -0.5],
+                                                            std=[1., 1., 1.]),
+                                       ])
+        diff_adv = torch.abs(invTrans(adv) - invTrans(cln_data))
+    else:
+        diff_adv = torch.abs(adv - cln_data)
     epsilon = torch.amax(diff_adv, dim=(1, 2, 3))
 
     pred_adv = predict_from_logits(model(adv))
@@ -168,7 +160,10 @@ if __name__ == '__main__':
 
     # calculate metrics
     PerD = PerceptualDistance(args.dataset)
-    distance = PerD.cal_perceptual_distances(cln_data, adv)
+    if args.dataset == 'stl10':
+        distance = PerD.cal_perceptual_distances(invTrans(cln_data), invTrans(adv))
+    else:
+        distance = PerD.cal_perceptual_distances(cln_data, adv)
     PerD.update(distance, adv.size(0))
     PerD.print_metric()
 
@@ -225,7 +220,7 @@ if __name__ == '__main__':
     # plt.show()
 
     # visualize the results
-    visualize = True
+    visualize = False
     if visualize:
         idx2name = lambda idx: names[idx]
         plt.figure(figsize=(10, 8))

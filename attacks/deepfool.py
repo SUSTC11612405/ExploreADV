@@ -41,7 +41,7 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
     :param clip_max: maximum value per input dimension.
     """
 
-    def __init__(self, predict, num_classes=None, nb_iter=50, eps=0.1, loosen_rate=1.1, loosen_num=10,
+    def __init__(self, predict, num_classes=None, nb_iter=50, eps=0.1, loosen_rate=1.2, loosen_num=10,
                  overshoot=0.02, clip_min=0., clip_max=1., loss_fn=None,
                  targeted=False):
         """
@@ -147,14 +147,19 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
         x0 = x
         p_total = torch.zeros_like(x)
         for itr in range(self.nb_iter):
-            if itr > 0 and itr % self.loosen_num == 0:
-                mask = mask * self.loosen_rate
             # let's first get the logits using k = 1 to see if we are done
             diffs = [self.get_grads(x, 1, classes)]
 
             is_adv = self.is_adv(diffs[0]['logits'], y)
             if is_adv.all():
                 break
+
+            if itr > 0 and itr % self.loosen_num == 0:
+                mask = torch.where(
+                    self.atleast_kd(is_adv, x.ndim),
+                    mask,
+                    mask * self.loosen_rate
+                )
 
             diffs += [self.get_grads(x, k, classes) for k in range(2, self.num_classes)] # noqa
 
@@ -194,7 +199,7 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
                 x,
                 x0 + (1.0 + self.overshoot) * p_total,
             )  # =x_{i+1}
-            
+
             x = clamp(x, min=self.clip_min, max=self.clip_max).clone().detach().requires_grad_() # noqa
 
         return x.detach()

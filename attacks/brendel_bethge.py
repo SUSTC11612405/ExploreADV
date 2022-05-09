@@ -333,7 +333,7 @@ class BrendelBethgeAttack(Attack, LabelMixin):
     """
 
     def __init__(self, predict, loss_fn=None, overshoot: float = 1.1, steps: int = 1000,
-                 lr: float = 0.1, lr_decay: float = 0.4, lr_num_decay: int = 20,
+                 lr: float = 0.1, lr_decay: float = 0.5, lr_num_decay: int = 20,
                  momentum: float = 0.8, binary_search_steps: int = 10,
                  clip_min=0., clip_max=1., targeted=False
     ):
@@ -424,8 +424,8 @@ class BrendelBethgeAttack(Attack, LabelMixin):
             mask = ep.astensor(mask)
             # min_ = ep.where(mask > 0, 0, originals)
             # max_ = ep.where(mask > 0, 1, originals)
-            min_ = ep.where(mask > 0, ep.maximum(originals - mask, 0), originals)
-            max_ = ep.where(mask > 0, ep.minimum(originals + mask, 1), originals)
+            min_ = ep.where(mask > 0, ep.maximum(originals - mask, self.clip_min), originals)
+            max_ = ep.where(mask > 0, ep.minimum(originals + mask, self.clip_max), originals)
 
         min_np_flatten = min_.numpy().reshape((N, -1))
         max_np_flatten = max_.numpy().reshape((N, -1))
@@ -473,7 +473,7 @@ class BrendelBethgeAttack(Attack, LabelMixin):
         lrs = self.lr * np.ones(N)
         lr_reduction_interval = max(1, int(self.steps / self.lr_num_decay))
         converged = np.zeros(N, dtype=np.bool)
-        counter = np.zeros(N, dtype=np.bool)
+        # counter = np.zeros(N, dtype=np.bool)
         rate_normalization = (max_np_flatten - min_np_flatten).sum(axis=-1)
         original_shape = x.shape
         _best_advs = best_advs.numpy()
@@ -502,8 +502,8 @@ class BrendelBethgeAttack(Attack, LabelMixin):
                 for idx in np.arange(N)[_closer]:
                     _best_advs[idx] = x_np_flatten[idx].reshape(original_shape[1:])
 
-            counter = np.where(closer.numpy().flatten(), 0, counter + 1)
-            converged = counter > 10
+            # counter = np.where(closer.numpy().flatten(), 0, counter + 1)
+            # converged = counter > 10
             # print(step, converged, counter)
             # 100 steps: [0.08128784 0.04055694 0.05031109 0.0882149  0.0354948]
 
@@ -1250,12 +1250,12 @@ class LinfOptimizer(Optimizer):
         return self.binary_search(params0, bounds, x0, x, b, _min, _max, c, r)
 
     def binary_search(
-        self, q0, bounds, x0, x, b, _min, _max, c, r, etol=1e-3, maxiter=1000
+        self, q0, bounds, x0, x, b, _min, _max, c, r, etol=1e-6, maxiter=1000
     ):
         # perform binary search over epsilon
-        epsilon = (_max - _min) / 2.0
-        eps_low = _min
-        eps_high = _max
+        epsilon = np.max(_max - _min) / 2.0
+        eps_low = 0.0
+        eps_high = np.max(_max - _min)
         func_calls = 0
 
         bnorm = np.linalg.norm(b)
@@ -1263,7 +1263,7 @@ class LinfOptimizer(Optimizer):
 
         k = 0
 
-        while np.sum(eps_high - eps_low) > etol:
+        while eps_high - eps_low > etol:
             fun, nfev, _lambda0 = self.fun(
                 epsilon, x0, x, b, _min, _max, c, r, lambda0=lambda0
             )
@@ -1292,7 +1292,7 @@ class LinfOptimizer(Optimizer):
         _ell = np.empty_like(x0)
         _u = np.empty_like(x0)
         for i in range(N):
-            nx, px = x0[i] - epsilon[i], x0[i] + epsilon[i]
+            nx, px = x0[i] - epsilon, x0[i] + epsilon
             if nx > ell[i]:
                 _ell[i] = nx
             else:
@@ -1385,7 +1385,7 @@ class LinfOptimizer(Optimizer):
                 if norm > r ** 2:
                     return -np.inf, k, _lambda
                 else:
-                    return -np.sum(epsilon), k, _lambda
+                    return -epsilon, k, _lambda
             else:
                 # update lambda according to active variables
                 if _c > c:

@@ -87,8 +87,8 @@ def get_imagenet_val_loader(batch_size, shuffle=False):
             transforms.Compose([
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
-                transforms.ToTensor()
-                # normalize,
+                transforms.ToTensor(),
+                normalize,
             ])),
         batch_size=batch_size, shuffle=shuffle)
     loader.name = "imagenet_val"

@@ -65,7 +65,7 @@ if __name__ == '__main__':
     parser.add_argument('--region', type=str, default='whole', help='whole, top, bottom, left, right, select')
     parser.add_argument('--ratio', type=float, default=1.0, help='ratio of pixels allowed to perturb')
     parser.add_argument('--imperceivable', action="store_true", help='whether to have imperceivable perturbation')
-    parser.add_argument('--n_examples', type=int, default=100)
+    parser.add_argument('--n_examples', type=int, default=5)
     parser.add_argument('--data_dir', type=str, default='./dataset')
 
     args = parser.parse_args()
@@ -80,8 +80,13 @@ if __name__ == '__main__':
     # load data
     loader, names = get_dataloader_with_names(args.dataset, args.n_examples)
 
+    count = 0
+    target = 1
     for cln_data, true_label in loader:
-            break
+        # if count == target:
+        #     break
+        # count += 1
+        break
     cln_data, true_label = cln_data.to(device), true_label.to(device)
 
     # calculate raw precision
@@ -239,3 +244,11 @@ if __name__ == '__main__':
             plt.title("Difference \n epsilon: {:.2}".format(epsilon[ii]))
         plt.tight_layout()
         plt.show()
+    #
+    # plt.figure()
+    # for ii in range(count_found):
+    #     # clean image
+    #     plt.subplot(1, count_found, ii + 1)
+    #     _imshow(adv[ii])
+    # plt.tight_layout()
+    # plt.show()

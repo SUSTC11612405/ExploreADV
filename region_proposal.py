@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import shap
 from captum.attr import IntegratedGradients, NoiseTunnel
-
+from pytorch_grad_cam import GradCAM, GradCAMPlusPlus
 
 def normalize(a):
     axis = (1, 2, 3)
@@ -74,7 +74,31 @@ def get_shap_mask(data, explainer):
     return shap_mask
 
 
-def get_captum_mask(model, data, label):
+def get_gradcamplusplus_mask(model, data, target_layers):
+    targets = None
+    with GradCAMPlusPlus(model=model,
+                target_layers=target_layers,
+                use_cuda=False) as cam:
+        grayscale_cam = cam(input_tensor=data,
+                            targets=targets,
+                            aug_smooth=False,
+                            eigen_smooth=False)
+        return grayscale_cam
+
+
+def get_gradcam_mask(model, data, target_layers):
+    targets = None
+    with GradCAM(model=model,
+                target_layers=target_layers,
+                use_cuda=False) as cam:
+        grayscale_cam = cam(input_tensor=data,
+                            targets=targets,
+                            aug_smooth=False,
+                            eigen_smooth=False)
+        return grayscale_cam
+
+
+def get_captum_mask(model, data, label, correction=True):
     def attribute_image_features(algorithm, input, **kwargs):
         model.zero_grad()
         tensor_attributions = algorithm.attribute(input, target=label, **kwargs)
@@ -85,8 +109,10 @@ def get_captum_mask(model, data, label):
     attr_ig = attribute_image_features(nt, data, baselines=data * 0, nt_type='smoothgrad_sq',
                                        nt_samples=10, stdevs=0.2)
     # attr_ig, delta = attribute_image_features(ig, data, baselines=data * 0, return_convergence_delta=True)
-    dist = get_dist2boundary_mask(data)
-    captum_mask = attr_ig.numpy() * dist
+    captum_mask = attr_ig.numpy()
+    if correction:
+        dist = get_dist2boundary_mask(data)
+        captum_mask *= dist
     return captum_mask
 
 
@@ -95,7 +121,7 @@ def get_nbyn_mask(data, n, x, y):
     mask[:, :, x:x+n, y:y+n] = 1.0
     # sigma = get_sigma_mask(data)
     # mask = mask * sigma
-    return torch.tensor(mask)#, dtype=torch.float32)
+    return torch.tensor(mask, dtype=torch.float32)
 
 
 def get_region_mask(data, region):
@@ -122,4 +148,4 @@ def get_combined_mask(masks, ratio):
         # mask *= quantile(random_mask, 1.0 - ratio)
     elif ratio > 1.0:
         mask *= topk(masks['importance'], int(ratio))
-    return torch.tensor(mask)#, dtype=torch.float32)
+    return torch.tensor(mask, dtype=torch.float32)

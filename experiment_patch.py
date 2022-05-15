@@ -57,34 +57,16 @@ def get_dataloader_with_names(dataset, n_examples):
     return loader, names
 
 
-def get_shap_loader(dataset, n_examples=100):
-    if dataset == 'mnist':
-        from dataloader import get_mnist_train_loader
-        loader = get_mnist_train_loader(batch_size=n_examples)
-    elif dataset == 'cifar10':
-        from dataloader import get_cifar10_train_loader
-        loader = get_cifar10_train_loader(batch_size=n_examples)
-    elif dataset == 'stl10':
-        from dataloader import get_stl10_train_loader
-        loader = get_stl10_train_loader(batch_size=n_examples)
-    elif dataset == 'imagenet':
-        from dataloader import get_imagenet_val_loader, load_imagenet_class_names
-        loader = get_imagenet_val_loader(batch_size=n_examples)
-    else:
-        error = "Only mnist, cifar10, stl10, imagenet data supported"
-        raise NotImplementedError(error)
-    return loader
-
-
 if __name__ == '__main__':
 
-    dataset = 'mnist'
+    # dataset = 'mnist'
     # path_model = './models/mnist_relu_9_200.onnx'
-    path_model = './models/convSmallRELU__Point.onnx'
-    # dataset = 'cifar10'
-    # path_model = './models/cifar10_2_255.onnx'
-    # path_model = './models/convBigRELU__DiffAI_cifar10.onnx'
-    # path_model = './models/ResNet18_PGD_cifar10.onnx'
+    # path_model = './models/convSmallRELU__Point.onnx'
+    dataset = 'cifar10'
+    # path_model = "./models/cifar10_relu_6_500.onnx"
+    # path_model = "./models/convMedGSIGMOID__Point.onnx"
+    # path_model = "./models/convBigRELU__DiffAI_cifar10.onnx"
+    path_model = "./models/ResNet18_PGD_cifar10.onnx"
     # dataset = 'stl10'
     n_examples = 1
     eps = 1.0
@@ -100,7 +82,7 @@ if __name__ == '__main__':
     loader, names = get_dataloader_with_names(dataset, n_examples)
     count = 0
     for cln_data, true_label in loader:
-        if count == 4:
+        if count == 1:
             break
         count += 1
     cln_data, true_label = cln_data.to(device), true_label.to(device)
@@ -122,7 +104,7 @@ if __name__ == '__main__':
     importance_mask = get_captum_mask(model, cln_data, true_label)
 
     w, h = cln_data.data.shape[-2:]
-    n = 15
+    n = 10
     results = []
     closest = 1
     pos_closest = (0, 0)
@@ -132,32 +114,32 @@ if __name__ == '__main__':
     import time
     start_time = time.time()
 
-    # for i in range(w - n):
-    #     for j in range(h - n):
-    #         shap_sum = np.sum(importance_mask[:, :, i:i + n, j:j + n])
-    #         if shap_sum > largest:
-    #             pos_largest = (i, j)
-    #             largest = shap_sum
-    # print(pos_largest)
-    # mask = get_nbyn_mask(cln_data.data, n, pos_largest[0], pos_largest[1])
+    for i in range(w - n):
+        for j in range(h - n):
+            shap_sum = np.sum(importance_mask[:, :, i:i + n, j:j + n])
+            if shap_sum > largest:
+                pos_largest = (i, j)
+                largest = shap_sum
+    print(pos_largest)
+    mask = get_nbyn_mask(cln_data.data, n, pos_largest[0], pos_largest[1])
 
-    # attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
-    # adv = attack_df.perturb(cln_data, true_label, mask=mask)
-    #
-    # pred_df = predict_from_logits(model(adv))
-    # df_found = ~torch.eq(true_label, pred_df)
-    # count_df_found = torch.count_nonzero(df_found).item()
-    #
-    # # run BB
-    # attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
-    # adv_bb = attack_bb.perturb(cln_data[df_found], adv[df_found], mask=mask[df_found])
-    #
-    # diff_df = torch.abs(adv - cln_data)
-    # diff_bb = torch.abs(adv_bb - cln_data)
-    # epsilon_df = torch.amax(diff_df, dim=(1, 2, 3))[0].item()
-    # epsilon_bb = torch.amax(diff_bb, dim=(1, 2, 3))[0].item()
-    # print(epsilon_df, epsilon_bb)
-    #
+    attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
+    adv = attack_df.perturb(cln_data, true_label, mask=mask)
+
+    pred_df = predict_from_logits(model(adv))
+    df_found = ~torch.eq(true_label, pred_df)
+    count_df_found = torch.count_nonzero(df_found).item()
+
+    # run BB
+    attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
+    adv_bb = attack_bb.perturb(cln_data[df_found], adv[df_found], mask=mask[df_found])
+
+    diff_df = torch.abs(adv - cln_data)
+    diff_bb = torch.abs(adv_bb - cln_data)
+    epsilon_df = torch.amax(diff_df, dim=(1, 2, 3))[0].item()
+    epsilon_bb = torch.amax(diff_bb, dim=(1, 2, 3))[0].item()
+    print(epsilon_df, epsilon_bb)
+
     # print(predict_from_logits(model(adv)), predict_from_logits(model(adv_bb)))
     #
     # idx2name = lambda idx: names[idx]
@@ -181,85 +163,84 @@ if __name__ == '__main__':
     # plt.tight_layout()
     # plt.show()
 
-
-    for i in range(w - n):
-        for j in range(h - n):
-            mask = get_nbyn_mask(cln_data.data, n, i, j)
-            # run attack
-            # run Deepfool
-            attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
-            adv = attack_df.perturb(cln_data, true_label, mask=mask)
-
-            pred_df = predict_from_logits(model(adv))
-            df_found = ~torch.eq(true_label, pred_df)
-            count_df_found = torch.count_nonzero(df_found).item()
-            # print("Deepfool attack success rate: {:.0%}({}/{})".format(count_df_found / count_correct, count_df_found, count_correct))
-            if count_df_found == 0:
-                print("Deepfool failed to find any")
-                continue
-
-            # run BB
-            attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
-            adv_bb = attack_bb.perturb(cln_data[df_found], adv[df_found], mask=mask[df_found])
-            adv[df_found] = adv_bb
-
-            diff_adv = torch.abs(adv - cln_data)
-            epsilon = torch.amax(diff_adv, dim=(1, 2, 3))
-
-            pred_adv = predict_from_logits(model(adv))
-            found = torch.logical_and(~torch.eq(true_label, pred_adv), torch.lt(epsilon, eps))
-            count_found = torch.count_nonzero(found).item()
-            # print("Attack success rate: {:.0%}({}/{})".format(count_found / count_correct, count_found, count_correct))
-            if count_found == 0:
-                print("BB failed to find any")
-                continue
-
-            true_label = true_label[found]
-            cln_data = cln_data[found]
-            adv = adv[found]
-            diff_adv = diff_adv[found]
-            epsilon = epsilon[found]
-            pred_cln = pred_cln[found]
-            pred_adv = pred_adv[found]
-
-            # calculate metrics
-            # PerD = PerceptualDistance(dataset)
-            # distance = PerD.cal_perceptual_distances(cln_data, adv)
-            # PerD.update(distance, adv.size(0))
-            # PerD.print_metric()
-
-            importance_sum = np.sum(importance_mask[:, :, i:i + n, j:j + n])
-            if importance_sum > largest:
-                pos_largest = (i, j)
-                largest = importance_sum
-                adv_shap = adv
-                diff_shap = diff_adv
-
-            epsilon = epsilon[0].item()
-
-            if epsilon < closest:
-                pos_closest = (i, j)
-                closest = epsilon
-                adv_smallest = adv
-                diff_smallest = diff_adv
-
-            print(epsilon, importance_sum)
-            results.append((epsilon, importance_sum))
-
+    # for i in range(w - n):
+    #     for j in range(h - n):
+    #         mask = get_nbyn_mask(cln_data.data, n, i, j)
+    #         # run attack
+    #         # run Deepfool
+    #         attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
+    #         adv = attack_df.perturb(cln_data, true_label, mask=mask)
+    #
+    #         pred_df = predict_from_logits(model(adv))
+    #         df_found = ~torch.eq(true_label, pred_df)
+    #         count_df_found = torch.count_nonzero(df_found).item()
+    #         # print("Deepfool attack success rate: {:.0%}({}/{})".format(count_df_found / count_correct, count_df_found, count_correct))
+    #         if count_df_found == 0:
+    #             print("Deepfool failed to find any")
+    #             continue
+    #
+    #         # run BB
+    #         attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
+    #         adv_bb = attack_bb.perturb(cln_data[df_found], adv[df_found], mask=mask[df_found])
+    #         adv[df_found] = adv_bb
+    #
+    #         diff_adv = torch.abs(adv - cln_data)
+    #         epsilon = torch.amax(diff_adv, dim=(1, 2, 3))
+    #
+    #         pred_adv = predict_from_logits(model(adv))
+    #         found = torch.logical_and(~torch.eq(true_label, pred_adv), torch.lt(epsilon, eps))
+    #         count_found = torch.count_nonzero(found).item()
+    #         # print("Attack success rate: {:.0%}({}/{})".format(count_found / count_correct, count_found, count_correct))
+    #         if count_found == 0:
+    #             print("BB failed to find any")
+    #             continue
+    #
+    #         true_label = true_label[found]
+    #         cln_data = cln_data[found]
+    #         adv = adv[found]
+    #         diff_adv = diff_adv[found]
+    #         epsilon = epsilon[found]
+    #         pred_cln = pred_cln[found]
+    #         pred_adv = pred_adv[found]
+    #
+    #         # calculate metrics
+    #         # PerD = PerceptualDistance(dataset)
+    #         # distance = PerD.cal_perceptual_distances(cln_data, adv)
+    #         # PerD.update(distance, adv.size(0))
+    #         # PerD.print_metric()
+    #
+    #         importance_sum = np.sum(importance_mask[:, :, i:i + n, j:j + n])
+    #         if importance_sum > largest:
+    #             pos_largest = (i, j)
+    #             largest = importance_sum
+    #             adv_shap = adv
+    #             diff_shap = diff_adv
+    #
+    #         epsilon = epsilon[0].item()
+    #
+    #         if epsilon < closest:
+    #             pos_closest = (i, j)
+    #             closest = epsilon
+    #             adv_smallest = adv
+    #             diff_smallest = diff_adv
+    #
+    #         print(epsilon, importance_sum)
+    #         results.append((epsilon, importance_sum))
+    #
     print("Time cost: ", time.time()-start_time)
-    results = sorted(results)
-
-    print(" {} | {} | {} | {} | {} |"
-          .format(sum(1 for r in results) / ((w-n)*(h-n)),
-                  sorted(results, key=lambda x: x[1], reverse=True)[0][0],
-                  results[0][0],
-                  sum(r[0] for r in results)/sum(1 for r in results),
-                  results[-1][0]))
-
-    print("shap: ", sorted(results, key=lambda x: x[1], reverse=True)[0][0])
-
-    print(pos_closest)
-    print(pos_largest)
+    # results = sorted(results)
+    #
+    # print(" {:.4} | {:.4} | {:.4} | {:.4} | {:.4} |"
+    #       .format(sum(1 for r in results) / ((w-n)*(h-n)),
+    #               sorted(results, key=lambda x: x[1], reverse=True)[0][0],
+    #               results[0][0],
+    #               sum(r[0] for r in results)/sum(1 for r in results),
+    #               results[-1][0]))
+    #
+    # print("shap: ", sorted(results, key=lambda x: x[1], reverse=True)[0][0])
+    #
+    # print(pos_closest)
+    # print(pos_largest)
 
     # idx2name = lambda idx: names[idx]
     # plt.figure(figsize=(10, 8))

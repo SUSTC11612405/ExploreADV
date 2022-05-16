@@ -4,6 +4,8 @@ from torch.distributions import laplace
 from torch.distributions import uniform
 import eagerpy as ep
 
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda" if use_cuda else "cpu")
 
 def bchw2bhwc(x):
     if isinstance(x, np.ndarray):
@@ -58,7 +60,7 @@ def _imshow_diff(img):
 def project_region(mask, data):
     # x = data.numpy()
     # x = np.where(mask, x, 0)
-    zero = torch.zeros_like(mask)
+    zero = torch.zeros_like(mask).to(device)
     return torch.where(mask > zero, data, zero)
 
 

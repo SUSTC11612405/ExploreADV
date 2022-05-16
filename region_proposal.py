@@ -4,6 +4,11 @@ import shap
 from captum.attr import IntegratedGradients, NoiseTunnel
 from pytorch_grad_cam import GradCAM, GradCAMPlusPlus
 
+
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda" if use_cuda else "cpu")
+
+
 def normalize(a):
     axis = (1, 2, 3)
     min_a = np.min(a, axis=axis, keepdims=True)
@@ -63,7 +68,8 @@ def get_shap_explainer(model, background):
 
 
 def get_dist2boundary_mask(data, _min=0.0, _max=1.0):
-    return np.where(data < 0.5, 0.5 + data, 1.5 - data)
+    np_data = data.detach().cpu().numpy()
+    return np.where(np_data < 0.5, 0.5 + np_data, 1.5 - np_data)
 
 
 def get_shap_mask(data, explainer):
@@ -109,7 +115,7 @@ def get_captum_mask(model, data, label, correction=True):
     attr_ig = attribute_image_features(nt, data, baselines=data * 0, nt_type='smoothgrad_sq',
                                        nt_samples=10, stdevs=0.2)
     # attr_ig, delta = attribute_image_features(ig, data, baselines=data * 0, return_convergence_delta=True)
-    captum_mask = attr_ig.numpy()
+    captum_mask = attr_ig.detach().cpu().numpy()
     if correction:
         dist = get_dist2boundary_mask(data)
         captum_mask *= dist
@@ -117,11 +123,12 @@ def get_captum_mask(model, data, label, correction=True):
 
 
 def get_nbyn_mask(data, n, x, y):
-    mask = np.zeros_like(data)
+    np_data = data.detach().cpu().numpy()
+    mask = np.zeros_like(np_data)
     mask[:, :, x:x+n, y:y+n] = 1.0
     # sigma = get_sigma_mask(data)
     # mask = mask * sigma
-    return torch.tensor(mask, dtype=torch.float32)
+    return torch.tensor(mask, dtype=torch.float32).to(device)
 
 
 def get_region_mask(data, region):
@@ -148,4 +155,4 @@ def get_combined_mask(masks, ratio):
         # mask *= quantile(random_mask, 1.0 - ratio)
     elif ratio > 1.0:
         mask *= topk(masks['importance'], int(ratio))
-    return torch.tensor(mask, dtype=torch.float32)
+    return torch.tensor(mask, dtype=torch.float32).to(device)

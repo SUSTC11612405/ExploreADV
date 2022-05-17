@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import argparse
+import torchvision.transforms as transforms
 
 import onnx
 from onnx2pytorch import ConvertModel
@@ -85,8 +85,12 @@ def get_epsilon(cln_data, true_label, mask_name, target_layers, n=10):
                 score = mask_sum
 
     mask_n = get_nbyn_mask(cln_data.data, n, pos[0], pos[1])
-
-    attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
+    if dataset == 'stl10':
+        mask *= 2
+        attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=2.0,
+                                       clip_min=-1., clip_max=1.)
+    else:
+        attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
     adv = attack_df.perturb(cln_data, true_label, mask=mask_n)
 
     pred_df = predict_from_logits(model(adv))
@@ -96,10 +100,20 @@ def get_epsilon(cln_data, true_label, mask_name, target_layers, n=10):
         return 1.0
 
     # run BB
-    attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
+    if dataset == 'stl10':
+        attack_bb = LinfinityBrendelBethgeAttack(model, steps=100, clip_min=-1., clip_max=1.)
+    else:
+        attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
     adv_bb = attack_bb.perturb(cln_data, adv, mask=mask_n)
-
-    diff = torch.abs(adv_bb - cln_data)
+    if dataset == 'stl10':
+        invTrans = transforms.Compose([transforms.Normalize(mean=[0., 0., 0.],
+                                                            std=[1 / 0.5, 1 / 0.5, 1 / 0.5]),
+                                       transforms.Normalize(mean=[-0.5, -0.5, -0.5],
+                                                            std=[1., 1., 1.]),
+                                       ])
+        diff = torch.abs(invTrans(adv) - invTrans(cln_data))
+    else:
+        diff = torch.abs(adv_bb - cln_data)
     epsilon = torch.amax(diff, dim=(1, 2, 3))[0].item()
     return epsilon
 
@@ -108,12 +122,12 @@ if __name__ == '__main__':
     # dataset = 'mnist'
     # path_model = './models/mnist_relu_9_200.onnx'
     # path_model = './models/convSmallRELU__Point.onnx'
-    dataset = 'cifar10'
+    # dataset = 'cifar10'
     # path_model = "./models/cifar10_relu_6_500.onnx"
     # path_model = "./models/convMedGSIGMOID__Point.onnx"
-    path_model = "./models/convBigRELU__DiffAI_cifar10.onnx"
-    # path_model = "./models/ResNet18_PGD_cifar10.onnx"
-    # dataset = 'stl10'
+    # path_model = "./models/convBigRELU__DiffAI_cifar10.onnx"
+    path_model = "./models/ResNet18_PGD_cifar10.onnx"
+    dataset = 'stl10'
     n_examples = 1
     eps = 1.0
 
@@ -123,7 +137,7 @@ if __name__ == '__main__':
 
     # load model
     model = load_model(dataset, path_model)
-    target_layers = [model.Conv_25]
+    target_layers = [model.features[-1]]
 
     masks = ['captum', 'captum_correction', 'gradcam', 'gradcam++']
 
@@ -133,6 +147,9 @@ if __name__ == '__main__':
     count = 0
 
     for cln_data, true_label in loader:
+        # if index <= 5:
+        #     index += 1
+        #     continue
         if count == 100:
             break
         print(index)
@@ -153,7 +170,9 @@ if __name__ == '__main__':
         for mask_name in masks:
             epsilons[mask_name] = get_epsilon(cln_data, true_label, mask_name, target_layers)
 
-        with open('cifar10_convBigRELU_masks.csv', mode='a') as file:
+        with open('stl10_maks.csv', mode='a') as file:
+            # file.write("{},{:.4},{:.4}\n"
+            #            .format(index, *[epsilons[i] for i in masks]))
             file.write("{},{:.4},{:.4},{:.4},{:.4}\n"
                        .format(index, *[epsilons[i] for i in masks]))
         index += 1

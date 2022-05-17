@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import torchvision.transforms as transforms
 
 import onnx
 from onnx2pytorch import ConvertModel
@@ -59,14 +60,14 @@ def get_dataloader_with_names(dataset, n_examples):
 if __name__ == '__main__':
 
     # dataset = 'mnist'
-    # path_model = './models/mnist_relu_9_200.onnx'
+    path_model = './models/mnist_relu_9_200.onnx'
     # path_model = './models/convSmallRELU__Point.onnx'
-    dataset = 'cifar10'
+    # dataset = 'cifar10'
     # path_model = "./models/cifar10_relu_6_500.onnx"
-    path_model = "./models/convMedGSIGMOID__Point.onnx"
+    # path_model = "./models/convMedGSIGMOID__Point.onnx"
     # path_model = "./models/convBigRELU__DiffAI_cifar10.onnx"
     # path_model = "./models/ResNet18_PGD_cifar10.onnx"
-    # dataset = 'stl10'
+    dataset = 'stl10'
     n_examples = 1
     eps = 1.0
 
@@ -80,11 +81,11 @@ if __name__ == '__main__':
     # load data
     loader, names = get_dataloader_with_names(dataset, n_examples)
     index = 0
-    count = 42
+    count = 0
     for cln_data, true_label in loader:
-        if index <= 66:
-            index += 1
-            continue
+        # if index <= 10:
+        #     index += 1
+        #     continue
         if count == 100:
             break
         print(index)
@@ -113,9 +114,15 @@ if __name__ == '__main__':
         for i in tqdm(range(w - n)):
             for j in range(h - n):
                 mask = get_nbyn_mask(cln_data.data, n, i, j)
+                if dataset == 'stl10':
+                    mask *= 2
                 # run attack
                 # run Deepfool
-                attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
+                if dataset == 'stl10':
+                    attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=2.0,
+                                    clip_min=-1., clip_max=1.)
+                else:
+                    attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
                 adv = attack_df.perturb(cln_data, true_label, mask=mask)
 
                 pred_df = predict_from_logits(model(adv))
@@ -125,11 +132,23 @@ if __name__ == '__main__':
                     continue
 
                 # run BB
-                attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
+                if dataset == 'stl10':
+                    attack_bb = LinfinityBrendelBethgeAttack(model, steps=100, clip_min=-1., clip_max=1.)
+                else:
+                    attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
                 adv_bb = attack_bb.perturb(cln_data[df_found], adv[df_found], mask=mask[df_found])
                 adv[df_found] = adv_bb
 
-                diff_adv = torch.abs(adv - cln_data)
+                if dataset == 'stl10':
+                    invTrans = transforms.Compose([transforms.Normalize(mean=[0., 0., 0.],
+                                                                        std=[1 / 0.5, 1 / 0.5, 1 / 0.5]),
+                                                transforms.Normalize(mean=[-0.5, -0.5, -0.5],
+                                                                        std=[1., 1., 1.]),
+                                                ])
+                    diff_adv = torch.abs(invTrans(adv) - invTrans(cln_data))
+                else:
+                    diff_adv = torch.abs(adv - cln_data)
+
                 epsilon = torch.amax(diff_adv, dim=(1, 2, 3))
 
                 pred_adv = predict_from_logits(model(adv))
@@ -166,7 +185,7 @@ if __name__ == '__main__':
         print("Time cost: ", time.time()-start_time)
         results = sorted(results)
 
-        with open('cifar10_convMedGSIGMOID.csv', mode='a') as file:
+        with open('stl10.csv', mode='a') as file:
             file.write("{},{:.4},{:.4},{:.4},{:.4},{:.4}\n"
                        .format(index,
                                sum(1 for r in results) / ((w-n)*(h-n)),
@@ -176,3 +195,6 @@ if __name__ == '__main__':
                                results[-1][0]))
         index += 1
         count += 1
+
+# xgpf5 resnet 3096963
+# xgpf4 stl10 2232670

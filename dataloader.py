@@ -24,12 +24,13 @@ def get_mnist_train_loader(batch_size, shuffle=False):
     return loader
 
 
-def get_mnist_test_loader(batch_size, shuffle=False):
-    loader = torch.utils.data.DataLoader(
-        datasets.MNIST(DATA_PATH, train=False, download=True,
-                       transform=transforms.ToTensor()),
-        batch_size=batch_size, shuffle=shuffle)
+def get_mnist_test_loader(batch_size, get_size=False, shuffle=False):
+    dataset = datasets.MNIST(DATA_PATH, train=False, download=True,
+                             transform=transforms.ToTensor())
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     loader.name = "mnist_test"
+    if get_size:
+        return loader, len(dataset)
     return loader
 
 
@@ -42,12 +43,13 @@ def get_cifar10_train_loader(batch_size, shuffle=False):
     return loader
 
 
-def get_cifar10_test_loader(batch_size, shuffle=False):
-    loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10(DATA_PATH, train=False, download=True,
-                         transform=transforms.ToTensor()),
-        batch_size=batch_size, shuffle=shuffle)
+def get_cifar10_test_loader(batch_size, get_size=False, shuffle=False):
+    dataset = datasets.CIFAR10(DATA_PATH, train=False, download=True,
+                               transform=transforms.ToTensor())
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     loader.name = "cifar10_test"
+    if get_size:
+        return loader, len(dataset)
     return loader
 
 
@@ -63,15 +65,16 @@ def get_stl10_train_loader(batch_size, shuffle=False):
     return loader
 
 
-def get_stl10_test_loader(batch_size, shuffle=False):
-    loader = torch.utils.data.DataLoader(
-        datasets.STL10(DATA_PATH, split='test', download=True,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                       ])),
-        batch_size=batch_size, shuffle=shuffle)
+def get_stl10_test_loader(batch_size, get_size=False, shuffle=False):
+    dataset = datasets.STL10(DATA_PATH, split='test', download=True,
+                             transform=transforms.Compose([
+                                 transforms.ToTensor(),
+                                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                             ]))
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     loader.name = "stl10_test"
+    if get_size:
+        return loader, len(dataset)
     return loader
 
 

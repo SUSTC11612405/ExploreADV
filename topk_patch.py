@@ -11,7 +11,7 @@ from eval.eval_metric import PerceptualDistance
 from region_proposal import get_region_mask, get_combined_mask
 from utils import predict_from_logits, _imshow, _imshow_diff
 import matplotlib.pyplot as plt
-
+import heapq
 
 def load_model(dataset, path):
     if dataset in ['mnist', 'cifar10'] and path.endswith('onnx'):
@@ -56,80 +56,80 @@ def get_dataloader_with_names(dataset, n_examples):
         raise NotImplementedError(error)
     return loader, names
 
-def get_epsilon(cln_data, true_label, mask_name, target_layers, n=10):
-    from region_proposal import get_nbyn_mask, get_captum_mask, get_gradcam_mask, get_gradcamplusplus_mask
-    if mask_name == 'captum':
-        mask = get_captum_mask(model, cln_data, true_label, False)
-    elif mask_name == 'captum_correction':
-        mask = get_captum_mask(model, cln_data, true_label)
-    elif mask_name == 'gradcam':
-        mask = get_gradcam_mask(model, cln_data, target_layers)
-    elif mask_name == 'gradcam++':
-        mask = get_gradcamplusplus_mask(model, cln_data, target_layers)
-    else:
-        error = "Only captum, captum_correction, gradcam, gradcam++ mask supported"
-        raise NotImplementedError(error)
+
+def get_epsilon(cln_data, true_label, topk, n=10):
+    from region_proposal import get_nbyn_mask, get_captum_mask
+    mask = get_captum_mask(model, cln_data, true_label)
 
     w, h = cln_data.data.shape[-2:]
-    score = 0
-    pos = (0, 0)
+
+    maxk = max(topk)
+    pos_score = []
 
     for i in range(w - n):
         for j in range(h - n):
-            if mask_name in ['gradcam', 'gradcam++']:
-                mask_sum = np.sum(mask[:, i:i + n, j:j + n])
-            else:
-                mask_sum = np.sum(mask[:, :, i:i + n, j:j + n])
-            if mask_sum > score:
-                pos = (i, j)
-                score = mask_sum
+            mask_sum = np.sum(mask[:, :, i:i + n, j:j + n])
+            pos_score.append(((i, j), mask_sum))
 
-    mask_n = get_nbyn_mask(cln_data.data, n, pos[0], pos[1])
-    if dataset == 'stl10':
-        mask_n *= 2
-        attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=2.0,
-                                       clip_min=-1., clip_max=1.)
-    else:
-        attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
-    adv = attack_df.perturb(cln_data, true_label, mask=mask_n)
+    pos_score.sort(key=lambda x: x[1], reverse=True)
+    pos = [ps[0] for ps in pos_score[:maxk]]
 
-    pred_df = predict_from_logits(model(adv))
-    df_found = ~torch.eq(true_label, pred_df)
-    count_df_found = torch.count_nonzero(df_found).item()
-    if count_df_found == 0:
-        return 1.0
+    epsilons = {}
+    smallest = 1.0
+    for i in range(maxk):
+        mask_n = get_nbyn_mask(cln_data.data, n, pos[i][0], pos[i][1])
+        if dataset == 'stl10':
+            mask_n *= 2
+            attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=2.0,
+                                           clip_min=-1., clip_max=1.)
+        else:
+            attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=1.0)
+        adv = attack_df.perturb(cln_data, true_label, mask=mask_n)
 
-    # run BB
-    if dataset == 'stl10':
-        attack_bb = LinfinityBrendelBethgeAttack(model, steps=100, clip_min=-1., clip_max=1.)
-    else:
-        attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
-    adv_bb = attack_bb.perturb(cln_data, adv, mask=mask_n)
-    if dataset == 'stl10':
-        invTrans = transforms.Compose([transforms.Normalize(mean=[0., 0., 0.],
-                                                            std=[1 / 0.5, 1 / 0.5, 1 / 0.5]),
-                                       transforms.Normalize(mean=[-0.5, -0.5, -0.5],
-                                                            std=[1., 1., 1.]),
-                                       ])
-        diff = torch.abs(invTrans(adv_bb) - invTrans(cln_data))
-    else:
-        diff = torch.abs(adv_bb - cln_data)
-    epsilon = torch.amax(diff, dim=(1, 2, 3))[0].item()
-    return epsilon
+        pred_df = predict_from_logits(model(adv))
+        df_found = ~torch.eq(true_label, pred_df)
+        count_df_found = torch.count_nonzero(df_found).item()
+        if count_df_found == 0:
+            if i + 1 in topk:
+                epsilons[i + 1] = smallest
+            continue
+
+        # run BB
+        if dataset == 'stl10':
+            attack_bb = LinfinityBrendelBethgeAttack(model, steps=100, clip_min=-1., clip_max=1.)
+        else:
+            attack_bb = LinfinityBrendelBethgeAttack(model, steps=100)
+        adv_bb = attack_bb.perturb(cln_data, adv, mask=mask_n)
+        if dataset == 'stl10':
+            invTrans = transforms.Compose([transforms.Normalize(mean=[0., 0., 0.],
+                                                                std=[1 / 0.5, 1 / 0.5, 1 / 0.5]),
+                                           transforms.Normalize(mean=[-0.5, -0.5, -0.5],
+                                                                std=[1., 1., 1.]),
+                                           ])
+            diff = torch.abs(invTrans(adv_bb) - invTrans(cln_data))
+        else:
+            diff = torch.abs(adv_bb - cln_data)
+        epsilon = torch.amax(diff, dim=(1, 2, 3))[0].item()
+        if epsilon < smallest:
+            smallest = epsilon
+        if i+1 in topk:
+            epsilons[i+1] = smallest
+    return epsilons
 
 if __name__ == '__main__':
 
-    # dataset = 'mnist'
+    dataset = 'mnist'
     # path_model = './models/mnist_relu_9_200.onnx'
-    # path_model = './models/convSmallRELU__Point.onnx'
+    path_model = './models/convSmallRELU__Point.onnx'
     # dataset = 'cifar10'
     # path_model = "./models/cifar10_relu_6_500.onnx"
     # path_model = "./models/convMedGSIGMOID__Point.onnx"
     # path_model = "./models/convBigRELU__DiffAI_cifar10.onnx"
-    path_model = "./models/ResNet18_PGD_cifar10.onnx"
-    dataset = 'stl10'
+    # path_model = "./models/ResNet18_PGD_cifar10.onnx"
+    # dataset = 'stl10'
     n_examples = 1
     eps = 1.0
+    write_file_path = 'mnist_convSmallRELU_topk.csv'
 
     torch.manual_seed(0)
     use_cuda = torch.cuda.is_available()
@@ -137,9 +137,12 @@ if __name__ == '__main__':
 
     # load model
     model = load_model(dataset, path_model)
-    target_layers = [model.features[-1]]
 
-    masks = ['captum', 'captum_correction', 'gradcam', 'gradcam++']
+    topk = [1, 3, 5, 7, 10, 15, 20, 30, 40, 50]
+
+    with open(write_file_path, mode='a') as file:
+        file.write("index," +
+                   ",".join(["top{}".format(k) for k in topk]) + "\n")
 
     # load data
     loader, names = get_dataloader_with_names(dataset, n_examples)
@@ -166,15 +169,12 @@ if __name__ == '__main__':
         cln_data = cln_data[correct]
         true_label = true_label[correct]
         pred_cln = pred_cln[correct]
-        epsilons = {}
-        for mask_name in masks:
-            epsilons[mask_name] = get_epsilon(cln_data, true_label, mask_name, target_layers)
+
+        epsilons = get_epsilon(cln_data, true_label, topk)
 
         # print(epsilons)
-        with open('stl10_maks.csv', mode='a') as file:
-            # file.write("{},{:.4},{:.4}\n"
-            #            .format(index, *[epsilons[i] for i in masks]))
-            file.write("{},{:.4},{:.4},{:.4},{:.4}\n"
-                       .format(index, *[epsilons[i] for i in masks]))
+        with open(write_file_path, mode='a') as file:
+            file.write(str(index) + "," +
+                       ",".join(["{:.4}".format(epsilons[i]) for i in topk])+"\n")
         index += 1
         count += 1

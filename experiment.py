@@ -6,8 +6,7 @@ import numpy as np
 
 from utils import predict_from_logits
 import torchvision.transforms as transforms
-from dataloader import get_mnist_test_loader, get_cifar10_test_loader, get_stl10_test_loader, \
-    get_cifar10_normalized_test_loader
+from dataloader import get_mnist_test_loader, get_cifar10_test_loader, get_stl10_test_loader
 from attacks import DeepfoolLinfAttack, LinfinityBrendelBethgeAttack
 
 torch.manual_seed(0)

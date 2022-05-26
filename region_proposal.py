@@ -1,8 +1,5 @@
 import torch
 import numpy as np
-import shap
-from captum.attr import IntegratedGradients, NoiseTunnel
-from pytorch_grad_cam import GradCAM, GradCAMPlusPlus
 
 
 use_cuda = torch.cuda.is_available()
@@ -63,6 +60,7 @@ def get_sigma_mask(data):
 
 
 def get_shap_explainer(model, background):
+    import shap
     # return shap.GradientExplainer(model, background, local_smoothing=0)
     return shap.DeepExplainer(model, background)
 
@@ -81,6 +79,7 @@ def get_shap_mask(data, explainer):
 
 
 def get_gradcamplusplus_mask(model, data, target_layers):
+    from pytorch_grad_cam import GradCAMPlusPlus
     targets = None
     with GradCAMPlusPlus(model=model,
                 target_layers=target_layers,
@@ -93,6 +92,7 @@ def get_gradcamplusplus_mask(model, data, target_layers):
 
 
 def get_gradcam_mask(model, data, target_layers):
+    from pytorch_grad_cam import GradCAM
     targets = None
     with GradCAM(model=model,
                 target_layers=target_layers,
@@ -105,6 +105,8 @@ def get_gradcam_mask(model, data, target_layers):
 
 
 def get_captum_mask(model, data, label, correction=True):
+    from captum.attr import IntegratedGradients, NoiseTunnel
+
     def attribute_image_features(algorithm, input, **kwargs):
         model.zero_grad()
         tensor_attributions = algorithm.attribute(input, target=label, **kwargs)
@@ -126,8 +128,6 @@ def get_nbyn_mask(data, n, x, y):
     np_data = data.detach().cpu().numpy()
     mask = np.zeros_like(np_data)
     mask[:, :, x:x+n, y:y+n] = 1.0
-    # sigma = get_sigma_mask(data)
-    # mask = mask * sigma
     return torch.tensor(mask, dtype=torch.float32).to(device)
 
 
@@ -151,8 +151,6 @@ def get_combined_mask(masks, ratio):
         mask *= masks['sigma']
     if ratio < 1.0:
         mask *= quantile(masks['importance'], 1.0 - ratio)
-        # random_mask = np.random.rand(*masks['region'].shape)
-        # mask *= quantile(random_mask, 1.0 - ratio)
     elif ratio > 1.0:
         mask *= topk(masks['importance'], int(ratio))
     return torch.tensor(mask, dtype=torch.float32).to(device)

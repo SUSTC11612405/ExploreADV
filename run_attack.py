@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import numpy as np
 import argparse
 
 import onnx
@@ -9,7 +8,7 @@ from onnx2pytorch import ConvertModel
 from attacks import DeepfoolLinfAttack, LinfinityBrendelBethgeAttack
 from eval.eval_metric import PerceptualDistance
 from region_proposal import get_region_mask, get_combined_mask
-from utils import predict_from_logits, _imshow, _imshow_diff
+from utils import predict_from_logits, _imshow
 import matplotlib.pyplot as plt
 
 
@@ -60,12 +59,12 @@ def get_dataloader_with_names(dataset, n_examples):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Define hyperparameters.')
     parser.add_argument('--dataset', type=str, default='mnist', help='cifar10, mnist, stl10')
-    parser.add_argument('--path_model', type=str, default='./models/convSmallRELU__Point.onnx', help='path to the trained model')
+    parser.add_argument('--path_model', type=str, default='./models/mnist_convSmallRELU.onnx', help='path to the trained model')
     parser.add_argument('--eps', type=float, default=1.0, help='max perturbation size on each pixel')
-    parser.add_argument('--region', type=str, default='whole', help='whole, top, bottom, left, right, select')
+    parser.add_argument('--region', type=str, default='select', help='whole, top, bottom, left, right, select')
     parser.add_argument('--ratio', type=float, default=1.0, help='ratio of pixels allowed to perturb')
-    parser.add_argument('--imperceivable', action="store_true", help='whether to have imperceivable perturbation')
-    parser.add_argument('--n_examples', type=int, default=5)
+    parser.add_argument('--imperceptible', action="store_true", help='whether to have imperceptible perturbation')
+    parser.add_argument('--n_examples', type=int, default=5, help='number of examples to run')
     parser.add_argument('--data_dir', type=str, default='./dataset')
 
     args = parser.parse_args()
@@ -80,12 +79,7 @@ if __name__ == '__main__':
     # load data
     loader, names = get_dataloader_with_names(args.dataset, args.n_examples)
 
-    count = 0
-    target = 1
     for cln_data, true_label in loader:
-        # if count == target:
-        #     break
-        # count += 1
         break
     cln_data, true_label = cln_data.to(device), true_label.to(device)
 
@@ -105,7 +99,7 @@ if __name__ == '__main__':
         masks['region'] = region_selector(cln_data)
     else:
         masks['region'] = get_region_mask(cln_data.data, args.region)
-    if args.imperceivable:
+    if args.imperceptible:
         from region_proposal import get_sigma_mask
         masks['sigma'] = get_sigma_mask(cln_data.data)
     if args.ratio != 1.0:
@@ -116,6 +110,7 @@ if __name__ == '__main__':
     # run attack
     # run Deepfool
     if args.dataset == 'stl10':
+        combined_mask *= 2
         attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=2.0,
                                        clip_min=-1., clip_max=1.)
     else:
@@ -172,83 +167,21 @@ if __name__ == '__main__':
     PerD.update(distance, adv.size(0))
     PerD.print_metric()
 
-    # resnet18
-    # bottom    l0: 1535.11, l2: 11.79, l_inf: 0.08, ssim: 0.93, CIEDE2000: 185.11
-    # top       l0: 1534.22, l2: 10.51, l_inf: 0.07, ssim: 0.91, CIEDE2000: 207.04
-    # left      l0: 1535.00, l2: 12.18, l_inf: 0.07, ssim: 0.91, CIEDE2000: 205.18
-    # right     l0: 1534.06, l2: 8.89, l_inf: 0.07, ssim: 0.93, CIEDE2000: 191.68
-    # I         l0: 1534.67, l2: 6.02, l_inf: 0.06, ssim: 0.93, CIEDE2000: 173.57
-    # I+V 14/18 l0: 1535.71, l2: 1.93, l_inf: 0.07, ssim: 0.97, CIEDE2000: 105.08
-    # I2        l0: 1534.61, l2: 6.60, l_inf: 0.06, ssim: 0.92, CIEDE2000: 177.91
-
-    # 0.1 rand 13/18    l0: 307.77, l2: 13.39, l_inf: 0.21, ssim: 0.85, CIEDE2000: 282.39
-    # 0.1 shap 18/18    l0: 307.83, l2: 12.60, l_inf: 0.23, ssim: 0.86, CIEDE2000: 222.90
-    # 0.1 sigma 15/18   l0: 307.80, l2: 9.82, l_inf: 0.20, ssim: 0.92, CIEDE2000: 194.58
-
-    # # non-imperceivable
-    # start = attack_df.perturb(cln_data, true_label)
-    # adv_normal = attack_bb.perturb(cln_data, start)
-    # diff_adv_normal = adv_normal - cln_data
-    # pred_adv_normal = predict_from_logits(model(adv_normal))
-    # epsilon_normal = torch.amax(torch.abs(diff_adv_normal), dim=(1, 2, 3))
-    #
-    # PerD2 = PerceptualDistance(args.dataset)
-    # distance = PerD2.cal_perceptual_distances(cln_data, adv_normal)
-    # PerD2.update(distance, adv.size(0))
-    # PerD2.print_metric()
-    #
-    # idx2name = lambda idx: names[idx]
-    #
-    # plt.figure(figsize=(10, 8))
-    # for ii in range(count_found):
-    #     # clean image
-    #     plt.subplot(3, count_found * 2, 2 * ii + 1)
-    #     _imshow(cln_data[ii])
-    #     plt.title("clean \n pred: {}".format(idx2name(pred_cln[ii])))
-    #     # adv image
-    #     plt.subplot(3, count_found * 2, 2 * count_found + 2 * ii + 1)
-    #     _imshow(adv_normal[ii])
-    #     plt.title("minimal adv \n pred: {}".format(idx2name(pred_adv_normal[ii])))
-    #     # adv difference
-    #     plt.subplot(3, count_found * 2, 2 * count_found + 2 * ii + 2)
-    #     _imshow_diff(diff_adv_normal[ii])
-    #     plt.title("Difference \n epsilon: {:.2}".format(epsilon_normal[ii]))
-    #     # imperceivable adv image
-    #     plt.subplot(3, count_found * 2, 4 * count_found + 2 * ii + 1)
-    #     _imshow(adv[ii])
-    #     plt.title("imperceivable adv \n pred: {}".format(idx2name(pred_adv[ii])))
-    #     # imperceivable adv difference
-    #     plt.subplot(3, count_found * 2, 4 * count_found + 2 * ii + 2)
-    #     _imshow_diff(diff_adv[ii])
-    #     plt.title("Difference \n epsilon: {:.2}".format(epsilon[ii]))
-    # plt.tight_layout()
-    # plt.show()
-
     # visualize the results
-    visualize = False
-    if visualize:
-        idx2name = lambda idx: names[idx]
-        plt.figure(figsize=(10, 8))
-        for ii in range(count_found):
-            # clean image
-            plt.subplot(3, count_found, ii+1)
-            _imshow(cln_data[ii])
-            plt.title("clean \n pred: {}".format(idx2name(pred_cln[ii])))
-            # adv image
-            plt.subplot(3, count_found, count_found + ii+1)
-            _imshow(adv[ii])
-            plt.title("adversarial \n pred: {}".format(idx2name(pred_adv[ii])))
-            # adv difference
-            plt.subplot(3, count_found, 2 * count_found + ii+1)
-            _imshow(diff_adv[ii])
-            plt.title("Difference \n epsilon: {:.2}".format(epsilon[ii]))
-        plt.tight_layout()
-        plt.show()
-    #
-    # plt.figure()
-    # for ii in range(count_found):
-    #     # clean image
-    #     plt.subplot(1, count_found, ii + 1)
-    #     _imshow(adv[ii])
-    # plt.tight_layout()
-    # plt.show()
+    idx2name = lambda idx: names[idx]
+    plt.figure(figsize=(10, 8))
+    for ii in range(count_found):
+        # clean image
+        plt.subplot(3, count_found, ii+1)
+        _imshow(cln_data[ii])
+        plt.title("clean \n pred: {}".format(idx2name(pred_cln[ii])))
+        # adv image
+        plt.subplot(3, count_found, count_found + ii+1)
+        _imshow(adv[ii])
+        plt.title("adversarial \n pred: {}".format(idx2name(pred_adv[ii])))
+        # adv difference
+        plt.subplot(3, count_found, 2 * count_found + ii+1)
+        _imshow(diff_adv[ii])
+        plt.title("Difference \n epsilon: {:.2}".format(epsilon[ii]))
+    plt.tight_layout()
+    plt.show()

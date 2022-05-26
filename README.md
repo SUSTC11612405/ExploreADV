@@ -5,7 +5,18 @@ ExploreADV is flexible adversarial attack system that enables regional and imper
 
 ## Requirements
 
-torch; numpy; scipy; torchvision; onnx; onnx2pytorch; numba; Pillow; eagerpy; captum
+* torch
+* numpy
+* scipy
+* torchvision
+* onnx
+* onnx2pytorch
+* numba
+* Pillow
+* eagerpy
+* captum
+
+To install all the dependencies: run ```pip install -r requirements.txt```
 
 ## Running the example script:
 

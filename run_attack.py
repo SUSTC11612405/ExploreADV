@@ -109,6 +109,7 @@ if __name__ == '__main__':
 
     # run attack
     # run Deepfool
+    print("Running preliminary attack...")
     if args.dataset == 'stl10':
         combined_mask *= 2
         attack_df = DeepfoolLinfAttack(model, loss_fn=nn.CrossEntropyLoss(reduction="sum"), eps=2.0,
@@ -120,12 +121,13 @@ if __name__ == '__main__':
     pred_df = predict_from_logits(model(adv))
     df_found = ~torch.eq(true_label, pred_df)
     count_df_found = torch.count_nonzero(df_found).item()
-    print("Deepfool attack success rate: {:.0%}({}/{})".format(count_df_found / count_correct, count_df_found, count_correct))
+    print("Preliminary attack success rate: {:.0%}({}/{})".format(count_df_found / count_correct, count_df_found, count_correct))
     if count_df_found == 0:
-        print("Attack success rate: 0.0%(0/{})".format(count_correct))
+        print("Attack success rate: 0.0%(0/{}).".format(count_correct))
         exit(0)
 
     # run BB
+    print("Running optimization on the found adversarial examples...")
     if args.dataset == 'stl10':
         attack_bb = LinfinityBrendelBethgeAttack(model, steps=100, clip_min=-1., clip_max=1.)
     else:
@@ -149,6 +151,9 @@ if __name__ == '__main__':
     found = torch.logical_and(~torch.eq(true_label, pred_adv), torch.lt(epsilon, args.eps))
     count_found = torch.count_nonzero(found).item()
     print("Attack success rate: {:.0%}({}/{})".format(count_found / count_correct, count_found, count_correct))
+    if count_found == 0:
+        print("Failed to find any adversarial examples.")
+        exit(0)
 
     true_label = true_label[found]
     cln_data = cln_data[found]
@@ -165,6 +170,7 @@ if __name__ == '__main__':
     else:
         distance = PerD.cal_perceptual_distances(cln_data, adv)
     PerD.update(distance, adv.size(0))
+    print("Distance metrics over {} samples:".format(adv.size(0)))
     PerD.print_metric()
 
     # visualize the results

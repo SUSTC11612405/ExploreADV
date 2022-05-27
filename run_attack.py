@@ -61,7 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='mnist', help='cifar10, mnist, stl10')
     parser.add_argument('--path_model', type=str, default='./models/mnist_convSmallRELU.onnx', help='path to the trained model')
     parser.add_argument('--eps', type=float, default=1.0, help='max perturbation size on each pixel')
-    parser.add_argument('--region', type=str, default='select', help='whole, top, bottom, left, right, select')
+    parser.add_argument('--region', type=str, default='whole', help='whole, top, bottom, left, right, select')
     parser.add_argument('--ratio', type=float, default=1.0, help='ratio of pixels allowed to perturb')
     parser.add_argument('--imperceptible', action="store_true", help='whether to have imperceptible perturbation')
     parser.add_argument('--n_examples', type=int, default=5, help='number of examples to run')

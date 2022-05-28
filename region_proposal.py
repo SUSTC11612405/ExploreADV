@@ -149,6 +149,8 @@ def get_combined_mask(masks, ratio):
     mask = masks['region']
     if 'sigma' in masks:
         mask *= masks['sigma']
+    if 'importance' in masks:
+        masks['importance'] *= masks['region']
     if ratio < 1.0:
         mask *= quantile(masks['importance'], 1.0 - ratio)
     elif ratio > 1.0:

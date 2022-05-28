@@ -41,7 +41,7 @@ class DeepfoolLinfAttack(Attack, LabelMixin):
     :param clip_max: maximum value per input dimension.
     """
 
-    def __init__(self, predict, num_classes=None, nb_iter=50, eps=0.1, loosen_rate=1.4, loosen_num=10,
+    def __init__(self, predict, num_classes=None, nb_iter=50, eps=0.1, loosen_rate=1.3, loosen_num=10,
                  overshoot=0.02, clip_min=0., clip_max=1., loss_fn=None,
                  targeted=False):
         """

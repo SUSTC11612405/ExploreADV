@@ -70,8 +70,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     torch.manual_seed(0)
-    use_cuda = torch.cuda.is_available()
-    device = torch.device("cuda" if use_cuda else "cpu")
+    # use_cuda = torch.cuda.is_available()
+    # device = torch.device("cuda" if use_cuda else "cpu")
+    device = torch.device("cpu")
 
     # load model
     model = load_model(args.dataset, args.path_model)
@@ -166,7 +167,7 @@ if __name__ == '__main__':
     # calculate metrics
     PerD = PerceptualDistance(args.dataset)
     if args.dataset == 'stl10':
-        distance = PerD.cal_perceptual_distances(invTrans(cln_data.detach().cpu()), invTrans(adv))
+        distance = PerD.cal_perceptual_distances(invTrans(cln_data), invTrans(adv))
     else:
         distance = PerD.cal_perceptual_distances(cln_data.detach().cpu(), adv)
     PerD.update(distance, adv.size(0))

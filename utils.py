@@ -4,8 +4,9 @@ from torch.distributions import laplace
 from torch.distributions import uniform
 import eagerpy as ep
 
-use_cuda = torch.cuda.is_available()
-device = torch.device("cuda" if use_cuda else "cpu")
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda" if use_cuda else "cpu")
+device = torch.device("cpu")
 
 def bchw2bhwc(x):
     if isinstance(x, np.ndarray):

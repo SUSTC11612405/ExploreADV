@@ -2,9 +2,9 @@ import torch
 import numpy as np
 
 
-use_cuda = torch.cuda.is_available()
-device = torch.device("cuda" if use_cuda else "cpu")
-
+# use_cuda = torch.cuda.is_available()
+# device = torch.device("cuda" if use_cuda else "cpu")
+device = torch.device("cpu")
 
 def normalize(a):
     axis = (1, 2, 3)

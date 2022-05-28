@@ -18,7 +18,8 @@ class PerceptualDistance(object):
             self.sum['CIEDE2000'] = 0
 
         self.count = 0
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu")
 
     def cal_perceptual_distances(self, references, perturbed):
         distance = {}

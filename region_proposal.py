@@ -55,7 +55,8 @@ def sigma_map(x):
 
 
 def get_sigma_mask(data):
-    sigma_mask = sigma_map(data)
+    np_data = data.detach().cpu().numpy()
+    sigma_mask = sigma_map(np_data)
     return sigma_mask
 
 

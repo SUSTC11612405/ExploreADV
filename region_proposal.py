@@ -132,8 +132,9 @@ def get_nbyn_mask(data, n, x, y):
 
 
 def get_region_mask(data, region):
+    np_data = data.detach().cpu().numpy()
     rows, cols = data.shape[2:]
-    region_mask = np.ones_like(data)
+    region_mask = np.ones_like(np_data)
     if region == 'top':
         region_mask[:, :, rows // 2:, :] = 0.0
     elif region == 'bottom':

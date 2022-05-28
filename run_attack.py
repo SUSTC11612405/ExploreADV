@@ -166,9 +166,9 @@ if __name__ == '__main__':
     # calculate metrics
     PerD = PerceptualDistance(args.dataset)
     if args.dataset == 'stl10':
-        distance = PerD.cal_perceptual_distances(invTrans(cln_data), invTrans(adv))
+        distance = PerD.cal_perceptual_distances(invTrans(cln_data.detach().cpu()), invTrans(adv))
     else:
-        distance = PerD.cal_perceptual_distances(cln_data, adv)
+        distance = PerD.cal_perceptual_distances(cln_data.detach().cpu(), adv)
     PerD.update(distance, adv.size(0))
     print("Distance metrics over {} samples:".format(adv.size(0)))
     PerD.print_metric()

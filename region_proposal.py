@@ -29,7 +29,6 @@ def topk(a, k):
 
 def sigma_map(x):
     """ creates the sigma-map for the batch x (# samples * channels * width * height)"""
-    x = x.numpy()
     sh = [4]
     sh.extend(x.shape)
     t = np.zeros(sh)

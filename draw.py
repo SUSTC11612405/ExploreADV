@@ -190,7 +190,7 @@ class Application(tk.Frame):
         self.slider.configure(state='disabled')
 
         w, h = 500, 500
-        data = tensor.numpy()
+        data = tensor.detach().cpu().numpy()
         self.region_mask = np.zeros_like(data)
 
         self.images = [process_image_tensor(tensor[i], w, h) for i in range(tensor.shape[0])]

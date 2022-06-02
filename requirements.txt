@@ -1,5 +1,5 @@
 torch~=1.10.2
-numpy~=1.21.5
+numpy~=1.22.4
 scipy~=1.5.2
 torchvision~=0.11.3
 eagerpy~=0.30.0

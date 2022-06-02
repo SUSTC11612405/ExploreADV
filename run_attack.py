@@ -125,6 +125,7 @@ if __name__ == '__main__':
     print("Preliminary attack success rate: {:.0%}({}/{})".format(count_df_found / count_correct, count_df_found, count_correct))
     if count_df_found == 0:
         print("Attack success rate: 0.0%(0/{}).".format(count_correct))
+        print("Try to select larger regions for higher success rate.")
         exit(0)
 
     # run BB
@@ -152,6 +153,8 @@ if __name__ == '__main__':
     found = torch.logical_and(~torch.eq(true_label, pred_adv), torch.lt(epsilon, args.eps))
     count_found = torch.count_nonzero(found).item()
     print("Attack success rate: {:.0%}({}/{})".format(count_found / count_correct, count_found, count_correct))
+    if count_found / count_correct < 0.4:
+        print("Try to select larger regions for higher success rate.")
     if count_found == 0:
         print("Failed to find any adversarial examples.")
         exit(0)
